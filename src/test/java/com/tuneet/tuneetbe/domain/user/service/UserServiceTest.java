@@ -5,15 +5,18 @@ import com.tuneet.tuneetbe.domain.music.enums.GenreType;
 import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
 import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
+import com.tuneet.tuneetbe.domain.user.dto.request.SettingsUpdateRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SignUpRequest;
 import com.tuneet.tuneetbe.domain.user.dto.response.EmailAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.GenreReplaceResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.MyProfileResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.NicknameAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.ProfileAddResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.SettingsResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserGenreRepository;
+import com.tuneet.tuneetbe.domain.user.repository.UserPlatformRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
 import com.tuneet.tuneetbe.global.exception.CustomException;
 import org.junit.jupiter.api.DisplayName;
@@ -62,6 +65,9 @@ class UserServiceTest {
     private GenreRepository genreRepository;
 
     @Mock
+    private UserPlatformRepository userPlatformRepository;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     @InjectMocks
@@ -84,6 +90,158 @@ class UserServiceTest {
         ReflectionTestUtils.setField(genre, "id", id);
         ReflectionTestUtils.setField(genre, "genreName", genreType);
         return genre;
+    }
+
+    @Nested
+    @DisplayName("설정")
+    class Settings {
+
+        private User locationAgreedUser() {
+            User user = savedUser("튜니", null);
+            user.agreeLocation(LocalDateTime.now());
+            ReflectionTestUtils.setField(user, "latitude", 37.5);
+            ReflectionTestUtils.setField(user, "longitude", 127.0);
+            return user;
+        }
+
+        @Test
+        @DisplayName("설정 화면의 6개 항목을 반환한다")
+        void getSettings() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(locationAgreedUser()));
+            given(userPlatformRepository.existsByUserId(USER_ID)).willReturn(true);
+
+            // when
+            SettingsResponse response = userService.getSettings(USER_ID);
+
+            // then
+            assertThat(response.getLocationVisible()).isTrue();
+            assertThat(response.getLetterReceivable()).isTrue();
+            assertThat(response.getPlatformConnected()).isTrue();
+            assertThat(response.getTermsAgreed()).isTrue();
+            assertThat(response.getPrivacyAgreed()).isTrue();
+            assertThat(response.getLocationAgreed()).isTrue();
+        }
+
+        @Test
+        @DisplayName("위치 동의를 하지 않은 사용자의 위치 노출은 false로 반환한다")
+        void getSettingsWithoutLocationAgreement() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(savedUser("튜니", null)));
+
+            // when
+            SettingsResponse response = userService.getSettings(USER_ID);
+
+            // then
+            assertThat(response.getLocationVisible()).isFalse();
+            assertThat(response.getLocationAgreed()).isFalse();
+        }
+
+        @Test
+        @DisplayName("보낸 값만 변경하고 null인 값은 유지한다")
+        void updateOnlySentValues() {
+            // given
+            User user = locationAgreedUser();
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            SettingsResponse response = userService.updateSettings(USER_ID, new SettingsUpdateRequest(null, false, null));
+
+            // then
+            assertThat(response.getLetterReceivable()).isFalse();
+            assertThat(response.getLocationVisible()).isTrue();
+            assertThat(response.getLocationAgreed()).isTrue();
+        }
+
+        @Test
+        @DisplayName("위치 동의와 위치 노출을 함께 켤 수 있다")
+        void agreeAndShowLocation() {
+            // given
+            User user = savedUser("튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            SettingsResponse response = userService.updateSettings(USER_ID, new SettingsUpdateRequest(true, null, true));
+
+            // then
+            assertThat(user.getLocationAgreedAt()).isNotNull();
+            assertThat(response.getLocationVisible()).isTrue();
+        }
+
+        @Test
+        @DisplayName("이미 동의한 사용자가 다시 동의해도 기존 동의 일시를 유지한다")
+        void keepAgreedAt() {
+            // given
+            User user = locationAgreedUser();
+            LocalDateTime agreedAt = user.getLocationAgreedAt();
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            userService.updateSettings(USER_ID, new SettingsUpdateRequest(null, null, true));
+
+            // then
+            assertThat(user.getLocationAgreedAt()).isEqualTo(agreedAt);
+        }
+
+        @Test
+        @DisplayName("위치 동의를 철회하면 위치 좌표를 지우고 위치 노출을 끈다")
+        void withdrawLocationAgreement() {
+            // given
+            User user = locationAgreedUser();
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            SettingsResponse response = userService.updateSettings(USER_ID, new SettingsUpdateRequest(null, null, false));
+
+            // then
+            assertThat(user.getLocationAgreedAt()).isNull();
+            assertThat(user.getLatitude()).isNull();
+            assertThat(user.getLongitude()).isNull();
+            assertThat(response.getLocationVisible()).isFalse();
+        }
+
+        @Test
+        @DisplayName("위치 동의 없이 위치 노출을 켜면 LOCATION_AGREEMENT_REQUIRED 예외가 발생한다")
+        void showLocationWithoutAgreement() {
+            // given
+            User user = savedUser("튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when & then
+            assertThatThrownBy(() -> userService.updateSettings(USER_ID, new SettingsUpdateRequest(true, null, null)))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.LOCATION_AGREEMENT_REQUIRED);
+        }
+
+        @Test
+        @DisplayName("위치 동의를 철회하면서 위치 노출을 켜면 예외가 발생하고 좌표를 유지한다")
+        void withdrawAndShowLocation() {
+            // given
+            User user = locationAgreedUser();
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when & then
+            assertThatThrownBy(() -> userService.updateSettings(USER_ID, new SettingsUpdateRequest(true, null, false)))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.LOCATION_AGREEMENT_REQUIRED);
+
+            assertThat(user.getLatitude()).isEqualTo(37.5);
+        }
+
+        @Test
+        @DisplayName("사용자가 없으면 USER_NOT_FOUND 예외가 발생한다")
+        void userNotFound() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> userService.getSettings(USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        }
     }
 
     @Nested

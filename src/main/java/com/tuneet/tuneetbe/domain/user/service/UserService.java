@@ -5,17 +5,20 @@ import com.tuneet.tuneetbe.domain.music.entity.Genre;
 import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
 import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
+import com.tuneet.tuneetbe.domain.user.dto.request.SettingsUpdateRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SignUpRequest;
 import com.tuneet.tuneetbe.domain.user.dto.response.EmailAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.GenreReplaceResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.MyProfileResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.NicknameAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.ProfileAddResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.SettingsResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.SignUpResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.entity.UserGenre;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserGenreRepository;
+import com.tuneet.tuneetbe.domain.user.repository.UserPlatformRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
 import com.tuneet.tuneetbe.global.exception.CustomException;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +40,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final UserGenreRepository userGenreRepository;
     private final GenreRepository genreRepository;
+    private final UserPlatformRepository userPlatformRepository;
     private final PasswordEncoder passwordEncoder;
 
     // 회원가입
@@ -213,12 +217,82 @@ public class UserService {
                 .build();
     }
 
+    // 설정 조회
+    public SettingsResponse getSettings(Long userId) {
+
+        // 로그인한 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 응답 반환
+        return toSettingsResponse(user);
+    }
+
+    // 설정 변경
+    @Transactional
+    public SettingsResponse updateSettings(Long userId, SettingsUpdateRequest request) {
+
+        // 로그인한 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 요청에 값이 없으면 기존 위치 동의 여부 사용
+        boolean locationAgreed = user.getLocationAgreedAt() != null;
+        if (request.getLocationAgreed() != null) {
+            locationAgreed = request.getLocationAgreed();
+        }
+
+        // 위치 동의 없이 위치 노출을 켜는지 확인
+        if (request.getLocationVisible() != null && request.getLocationVisible() && !locationAgreed) {
+            log.warn("[UserService] 위치정보 수집 및 이용 동의가 필요합니다.");
+            throw new CustomException(UserErrorCode.LOCATION_AGREEMENT_REQUIRED);
+        }
+
+        // 위치 동의 저장
+        if (request.getLocationAgreed() != null && request.getLocationAgreed()) {
+            user.agreeLocation(LocalDateTime.now());
+        }
+
+        // 위치 동의 철회 시 동의 일시와 좌표 삭제
+        if (request.getLocationAgreed() != null && !request.getLocationAgreed()) {
+            user.withdrawLocationAgreement();
+        }
+
+        // 위치 노출과 편지 받기 변경
+        user.updateSettings(request.getLocationVisible(), request.getLetterReceivable());
+
+        // DB 저장
+        userRepository.saveAndFlush(user);
+
+        // 로그 출력
+        log.info("[UserService] 설정 변경 성공: userId = {}", userId);
+
+        // 응답 반환
+        return toSettingsResponse(user);
+    }
+
     // Genre 엔티티를 응답 dto로 변환
     private GenreResponse toGenreResponse(Genre genre) {
         return GenreResponse.builder()
                 .genreId(genre.getId())
                 .genreName(genre.getGenreName())
                 .displayName(genre.getGenreName().getDisplayName())
+                .build();
+    }
+
+    // User 엔티티를 설정 응답 dto로 변환
+    private SettingsResponse toSettingsResponse(User user) {
+
+        // 동의 일시가 있으면 위치 동의 상태
+        boolean locationAgreed = user.getLocationAgreedAt() != null;
+
+        return SettingsResponse.builder()
+                .locationVisible(locationAgreed && user.getLocationVisible())
+                .letterReceivable(user.getLetterReceivable())
+                .platformConnected(userPlatformRepository.existsByUserId(user.getId()))
+                .termsAgreed(user.getTermsAgreedAt() != null)
+                .privacyAgreed(user.getPrivacyAgreedAt() != null)
+                .locationAgreed(locationAgreed)
                 .build();
     }
 }

@@ -85,4 +85,29 @@ public class User extends BaseTimeEntity {
             this.profilePicture = profilePicture;
         }
     }
+
+    // 위치 노출과 편지 받기 변경 (null이면 유지)
+    public void updateSettings(Boolean locationVisible, Boolean letterReceivable) {
+        if (locationVisible != null) {
+            this.locationVisible = locationVisible;
+        }
+        if (letterReceivable != null) {
+            this.letterReceivable = letterReceivable;
+        }
+    }
+
+    // 위치 동의 저장 (이미 동의했으면 기존 일시 유지)
+    public void agreeLocation(LocalDateTime agreedAt) {
+        if (this.locationAgreedAt == null) {
+            this.locationAgreedAt = agreedAt;
+        }
+    }
+
+    // 위치 동의 철회 (동의 일시와 좌표 삭제, 위치 노출 끔)
+    public void withdrawLocationAgreement() {
+        this.locationAgreedAt = null;
+        this.latitude = null;
+        this.longitude = null;
+        this.locationVisible = false;
+    }
 }
