@@ -289,7 +289,7 @@ class UserServiceTest {
 
             // then
             assertThat(user.getDeletedAt()).isNotNull();
-            assertThat(user.getEmail()).isEqualTo("deleted_1@deleted.tuneet");
+            assertThat(user.getEmail()).startsWith("deleted_1_").endsWith("@deleted.tuneet");
             assertThat(user.getPassword()).isNotEqualTo("encoded-password");
             assertThat(user.getNickname()).isNull();
             assertThat(user.getProfilePicture()).isNull();

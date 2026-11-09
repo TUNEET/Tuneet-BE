@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "users")
@@ -116,7 +117,7 @@ public class User extends BaseTimeEntity {
 
     // 회원탈퇴 (개인정보를 파기하고 탈퇴 일시 저장)
     public void deleteUser(LocalDateTime deletedAt) {
-        this.email = "deleted_" + this.id + "@deleted.tuneet";
+        this.email = "deleted_" + this.id + "_" + UUID.randomUUID() + "@deleted.tuneet";
         this.password = "DELETED";
         this.nickname = null;
         this.profilePicture = null;
