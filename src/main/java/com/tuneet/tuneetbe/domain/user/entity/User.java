@@ -54,6 +54,10 @@ public class User extends BaseTimeEntity {
     @Column(nullable = false)
     private Boolean letterReceivable = true; // 편지 받기 여부
 
+    private String refreshTokenHash; // Refresh Token 해시값
+
+    private LocalDateTime refreshTokenExpiresAt; // Refresh Token 만료 일시
+
     @Builder
     private User(String email, String password, LocalDateTime termsAgreedAt, LocalDateTime privacyAgreedAt, LocalDateTime locationAgreedAt) {
         this.email = email;
@@ -61,5 +65,15 @@ public class User extends BaseTimeEntity {
         this.termsAgreedAt = termsAgreedAt;
         this.privacyAgreedAt = privacyAgreedAt;
         this.locationAgreedAt = locationAgreedAt;
+    }
+
+    public void updateRefreshToken(String refreshTokenHash, LocalDateTime refreshTokenExpiresAt) {
+        this.refreshTokenHash = refreshTokenHash;
+        this.refreshTokenExpiresAt = refreshTokenExpiresAt;
+    }
+
+    public void clearRefreshToken() {
+        this.refreshTokenHash = null;
+        this.refreshTokenExpiresAt = null;
     }
 }
