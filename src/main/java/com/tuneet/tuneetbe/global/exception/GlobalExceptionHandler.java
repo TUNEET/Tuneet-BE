@@ -3,6 +3,7 @@ package com.tuneet.tuneetbe.global.exception;
 import com.tuneet.tuneetbe.global.common.BaseResponse;
 import com.tuneet.tuneetbe.global.exception.model.BaseErrorCode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -52,6 +54,20 @@ public class GlobalExceptionHandler {
         log.warn("요청 파라미터 누락: {}", ex.getParameterName());
         return ResponseEntity.badRequest()
                 .body(new BaseResponse<>(false, GlobalErrorCode.INVALID_INPUT_VALUE.getCode(), message, Map.of(ex.getParameterName(), message)));
+    }
+
+    // 요청 파라미터 검증 실패
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<BaseResponse<?>> handleHandlerMethodValidationException(
+            HandlerMethodValidationException ex) {
+        String message = ex.getAllErrors().stream()
+                .map(MessageSourceResolvable::getDefaultMessage)
+                .findFirst()
+                .orElse(GlobalErrorCode.INVALID_INPUT_VALUE.getMessage());
+
+        log.warn("요청 파라미터 검증 실패: {}", message);
+        return ResponseEntity.badRequest()
+                .body(BaseResponse.error(GlobalErrorCode.INVALID_INPUT_VALUE.getCode(), message));
     }
 
     // 예상치 못한 예외
