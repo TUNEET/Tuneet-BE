@@ -99,6 +99,17 @@ class MusicApiClientTest {
     }
 
     @Test
+    @DisplayName("음악 API의 응답 본문이 비어 있으면 MUSIC_API_UNAVAILABLE 예외가 발생한다")
+    void emptyBody() {
+        respond("/v1/musics", 200, "");
+
+        assertThatThrownBy(() -> client.searchMusics("봄날", 1, 5))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(MusicErrorCode.MUSIC_API_UNAVAILABLE);
+    }
+
+    @Test
     @DisplayName("음악 API에 연결할 수 없으면 MUSIC_API_UNAVAILABLE 예외가 발생한다")
     void connectionFailure() {
         server.stop(0);

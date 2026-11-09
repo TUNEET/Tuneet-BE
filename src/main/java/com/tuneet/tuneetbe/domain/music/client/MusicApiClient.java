@@ -53,7 +53,7 @@ public class MusicApiClient {
             String path, String query, int page, int size,
             ParameterizedTypeReference<SearchPageResponse<T>> responseType) {
         try {
-            return client.get()
+            SearchPageResponse<T> result = client.get()
                     .uri(uri -> uri.path(path)
                             .queryParam("q", "{query}")
                             .queryParam("page", page)
@@ -61,6 +61,11 @@ public class MusicApiClient {
                             .build(query))
                     .retrieve()
                     .body(responseType);
+            if (result == null) {
+                log.error("음악 API 응답 본문 없음: {}", path);
+                throw new CustomException(MusicErrorCode.MUSIC_API_UNAVAILABLE);
+            }
+            return result;
         } catch (RestClientException e) {
             log.error("음악 API 호출 실패: {} - {}", path, e.getMessage());
             throw new CustomException(MusicErrorCode.MUSIC_API_UNAVAILABLE);
