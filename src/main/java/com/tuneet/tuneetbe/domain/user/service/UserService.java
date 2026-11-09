@@ -14,6 +14,7 @@ import com.tuneet.tuneetbe.domain.user.dto.response.NicknameAvailabilityResponse
 import com.tuneet.tuneetbe.domain.user.dto.response.ProfileAddResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.SettingsResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.SignUpResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.UserProfileResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.entity.UserGenre;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
@@ -29,7 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -293,6 +296,66 @@ public class UserService {
                 .termsAgreed(user.getTermsAgreedAt() != null)
                 .privacyAgreed(user.getPrivacyAgreedAt() != null)
                 .locationAgreed(locationAgreed)
+                .build();
+    }
+
+    // 다른 사용자 프로필 조회
+    public UserProfileResponse getUserProfile(Long loginUserId, Long targetUserId) {
+
+        // 본인을 조회하는지 확인
+        if (loginUserId.equals(targetUserId)) {
+            log.warn("[UserService] 본인의 프로필은 다른 사용자 프로필로 조회할 수 없습니다.");
+            throw new CustomException(UserErrorCode.SELF_PROFILE_NOT_ALLOWED);
+        }
+
+        // TODO: 차단 API 구현 후 차단 관계인 사용자 조회 제한
+        // 조회할 사용자 조회
+        User targetUser = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 로그인한 사용자의 선호 장르 id 조회
+        Set<Long> loginUserGenreIds = new HashSet<>();
+        for (UserGenre userGenre : userGenreRepository.findAllWithGenreByUserId(loginUserId)) {
+            loginUserGenreIds.add(userGenre.getGenre().getId());
+        }
+
+        // 조회할 사용자의 선호 장르와 함께 좋아하는 장르 세팅
+        List<GenreResponse> genreResponses = new ArrayList<>();
+        List<GenreResponse> commonGenreResponses = new ArrayList<>();
+        for (UserGenre userGenre : userGenreRepository.findAllWithGenreByUserId(targetUserId)) {
+            GenreResponse genreResponse = toGenreResponse(userGenre.getGenre());
+            genreResponses.add(genreResponse);
+
+            if (loginUserGenreIds.contains(userGenre.getGenre().getId())) {
+                commonGenreResponses.add(genreResponse);
+            }
+        }
+
+        // 함께 좋아하는 항목 세팅
+        UserProfileResponse.Common common = UserProfileResponse.Common.builder()
+                // TODO: 음악 데이터 연동 후 함께 좋아하는 아티스트 조회
+                .artists(List.of())
+                // TODO: 음악 데이터 연동 후 프로필 음악이 같으면 함께 좋아하는 노래로 조회
+                .music(null)
+                .genres(commonGenreResponses)
+                .build();
+
+        // 응답 반환
+        return UserProfileResponse.builder()
+                .userId(targetUser.getId())
+                .nickname(targetUser.getNickname())
+                .profilePicture(targetUser.getProfilePicture())
+                // TODO: 음악 데이터 연동 후 프로필 음악 조회
+                .profileMusic(null)
+                .genres(genreResponses)
+                // TODO: 음악 데이터 연동 후 좋아하는 아티스트 조회
+                .favoriteArtists(List.of())
+                // TODO: 매칭 구현 후 유사도 계산
+                .similarity(null)
+                // TODO: 위치 갱신 구현 후 거리 계산 (위치 노출을 끈 사용자는 null)
+                .distanceKm(null)
+                .letterReceivable(targetUser.getLetterReceivable())
+                .common(common)
                 .build();
     }
 }

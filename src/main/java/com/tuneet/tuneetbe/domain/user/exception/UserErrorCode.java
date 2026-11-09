@@ -15,7 +15,8 @@ public enum UserErrorCode implements BaseErrorCode {
     PASSWORD_MISMATCH("U4004", "올바른 비밀번호를 입력해 주세요.", HttpStatus.BAD_REQUEST),
     NICKNAME_DUPLICATE("U4005", "중복된 닉네임입니다.", HttpStatus.CONFLICT),
     GENRE_NOT_FOUND("U4006", "존재하지 않는 장르입니다.", HttpStatus.NOT_FOUND),
-    LOCATION_AGREEMENT_REQUIRED("U4007", "위치정보 수집 및 이용 동의가 필요합니다.", HttpStatus.BAD_REQUEST);
+    LOCATION_AGREEMENT_REQUIRED("U4007", "위치정보 수집 및 이용 동의가 필요합니다.", HttpStatus.BAD_REQUEST),
+    SELF_PROFILE_NOT_ALLOWED("U4008", "본인의 프로필은 내 정보 조회를 이용해 주세요.", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String message;

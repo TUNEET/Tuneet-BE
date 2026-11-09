@@ -11,6 +11,7 @@ import com.tuneet.tuneetbe.domain.user.dto.response.NicknameAvailabilityResponse
 import com.tuneet.tuneetbe.domain.user.dto.response.ProfileAddResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.SettingsResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.SignUpResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.UserProfileResponse;
 import com.tuneet.tuneetbe.domain.user.service.UserService;
 import com.tuneet.tuneetbe.global.common.BaseResponse;
 import com.tuneet.tuneetbe.global.security.CustomUserDetails;
@@ -145,5 +146,19 @@ public class UserController {
 
         // 응답 반환
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "설정 변경 성공", response));
+    }
+
+    // 다른 사용자 프로필 조회
+    @Operation(summary = "다른 사용자 프로필 조회", description = "로그인한 사용자가 다른 사용자의 프로필과 함께 좋아하는 항목을 조회하는 API")
+    @GetMapping("/users/{user-id}")
+    public ResponseEntity<BaseResponse<UserProfileResponse>> getUserProfile(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("user-id") Long userId) {
+
+        // service 호출
+        UserProfileResponse response = userService.getUserProfile(userDetails.getUserId(), userId);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "다른 사용자 프로필 조회 성공", response));
     }
 }

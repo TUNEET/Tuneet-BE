@@ -13,7 +13,9 @@ import com.tuneet.tuneetbe.domain.user.dto.response.MyProfileResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.NicknameAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.ProfileAddResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.SettingsResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.UserProfileResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
+import com.tuneet.tuneetbe.domain.user.entity.UserGenre;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserGenreRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserPlatformRepository;
@@ -90,6 +92,97 @@ class UserServiceTest {
         ReflectionTestUtils.setField(genre, "id", id);
         ReflectionTestUtils.setField(genre, "genreName", genreType);
         return genre;
+    }
+
+    @Nested
+    @DisplayName("다른 사용자 프로필 조회")
+    class GetUserProfile {
+
+        private static final Long TARGET_USER_ID = 2L;
+
+        private UserGenre userGenre(User user, Genre genre) {
+            return UserGenre.builder().user(user).genre(genre).build();
+        }
+
+        @Test
+        @DisplayName("상대의 프로필과 함께 좋아하는 장르를 반환한다")
+        void success() {
+            // given
+            User loginUser = savedUser("나", null);
+            User targetUser = savedUser("산책하는 튜니", "target.png");
+            ReflectionTestUtils.setField(targetUser, "id", TARGET_USER_ID);
+            Genre kPop = genre(1L, GenreType.K_POP);
+            Genre pop = genre(2L, GenreType.POP);
+            Genre rock = genre(10L, GenreType.ROCK);
+
+            given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.of(targetUser));
+            given(userGenreRepository.findAllWithGenreByUserId(USER_ID))
+                    .willReturn(List.of(userGenre(loginUser, kPop), userGenre(loginUser, rock)));
+            given(userGenreRepository.findAllWithGenreByUserId(TARGET_USER_ID))
+                    .willReturn(List.of(userGenre(targetUser, kPop), userGenre(targetUser, pop)));
+
+            // when
+            UserProfileResponse response = userService.getUserProfile(USER_ID, TARGET_USER_ID);
+
+            // then
+            assertThat(response.getUserId()).isEqualTo(TARGET_USER_ID);
+            assertThat(response.getNickname()).isEqualTo("산책하는 튜니");
+            assertThat(response.getProfilePicture()).isEqualTo("target.png");
+            assertThat(response.getLetterReceivable()).isTrue();
+            assertThat(response.getGenres()).extracting("genreName")
+                    .containsExactly(GenreType.K_POP, GenreType.POP);
+            assertThat(response.getCommon().getGenres()).extracting("genreName")
+                    .containsExactly(GenreType.K_POP);
+            assertThat(response.getCommon().getArtists()).isEmpty();
+            assertThat(response.getCommon().getMusic()).isNull();
+        }
+
+        @Test
+        @DisplayName("겹치는 장르가 없으면 함께 좋아하는 장르는 빈 목록이다")
+        void noCommonGenres() {
+            // given
+            User loginUser = savedUser("나", null);
+            User targetUser = savedUser("산책하는 튜니", null);
+            ReflectionTestUtils.setField(targetUser, "id", TARGET_USER_ID);
+
+            given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.of(targetUser));
+            given(userGenreRepository.findAllWithGenreByUserId(USER_ID))
+                    .willReturn(List.of(userGenre(loginUser, genre(10L, GenreType.ROCK))));
+            given(userGenreRepository.findAllWithGenreByUserId(TARGET_USER_ID))
+                    .willReturn(List.of(userGenre(targetUser, genre(1L, GenreType.K_POP))));
+
+            // when
+            UserProfileResponse response = userService.getUserProfile(USER_ID, TARGET_USER_ID);
+
+            // then
+            assertThat(response.getGenres()).hasSize(1);
+            assertThat(response.getCommon().getGenres()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("본인을 조회하면 SELF_PROFILE_NOT_ALLOWED 예외가 발생하고 사용자를 조회하지 않는다")
+        void selfProfile() {
+            // when & then
+            assertThatThrownBy(() -> userService.getUserProfile(USER_ID, USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.SELF_PROFILE_NOT_ALLOWED);
+
+            verify(userRepository, never()).findById(any());
+        }
+
+        @Test
+        @DisplayName("상대가 없으면 USER_NOT_FOUND 예외가 발생한다")
+        void userNotFound() {
+            // given
+            given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> userService.getUserProfile(USER_ID, TARGET_USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        }
     }
 
     @Nested
