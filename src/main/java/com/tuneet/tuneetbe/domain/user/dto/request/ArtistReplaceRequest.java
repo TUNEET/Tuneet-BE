@@ -20,6 +20,7 @@ public class ArtistReplaceRequest {
     @NotNull(message = "아티스트는 3팀 이상 선택해야 합니다.")
     @Size(min = 3, max = 20, message = "아티스트는 3팀 이상 20팀 이하로 선택해야 합니다.")
     private LinkedHashSet<
+            @NotNull(message = "올바른 아티스트 id가 아닙니다.")
             @Pattern(regexp = "^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$", message = "올바른 아티스트 id가 아닙니다.")
             String> artistIds;
 }
