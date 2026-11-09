@@ -1,7 +1,9 @@
 package com.tuneet.tuneetbe.domain.user.service;
 
+import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SignUpRequest;
 import com.tuneet.tuneetbe.domain.user.dto.response.EmailAvailabilityResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.ProfileAddResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.SignUpResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
@@ -77,6 +79,40 @@ public class UserService {
         // 응답 반환
         return EmailAvailabilityResponse.builder()
                 .available(available)
+                .build();
+    }
+
+    // 프로필 추가 설정
+    @Transactional
+    public ProfileAddResponse profileAdd(Long userId, ProfileAddRequest request) {
+
+        // 로그인한 사용자 조회
+        User userProfile = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 중복된 닉네임인지 조회
+        if (request.getNickname() != null
+                && !request.getNickname().equals(userProfile.getNickname())
+                && userRepository.existsByNickname(request.getNickname())) {
+            log.warn("[UserService] 중복된 닉네임입니다.");
+            throw new CustomException(UserErrorCode.NICKNAME_DUPLICATE);
+        }
+
+        // 프로필 추가 설정 저장
+        userProfile.updateProfile(request.getNickname(), request.getProfilePicture());
+
+        // DB 저장
+        userRepository.saveAndFlush(userProfile);
+
+        // 로그 출력
+        log.info("[UserService] 프로필 추가 설정 저장 성공: userId = {}", userProfile.getId());
+
+        // 응답 세팅
+        return ProfileAddResponse.builder()
+                .userId(userProfile.getId())
+                .nickname(userProfile.getNickname())
+                .profilePicture(userProfile.getProfilePicture())
+                .modifiedAt(userProfile.getModifiedAt())
                 .build();
     }
 }
