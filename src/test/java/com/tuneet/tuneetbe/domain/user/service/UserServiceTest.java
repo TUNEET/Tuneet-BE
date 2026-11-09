@@ -1,12 +1,19 @@
 package com.tuneet.tuneetbe.domain.user.service;
 
+import com.tuneet.tuneetbe.domain.music.entity.Genre;
+import com.tuneet.tuneetbe.domain.music.enums.GenreType;
+import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
+import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SignUpRequest;
 import com.tuneet.tuneetbe.domain.user.dto.response.EmailAvailabilityResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.GenreReplaceResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.MyProfileResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.NicknameAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.ProfileAddResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
+import com.tuneet.tuneetbe.domain.user.repository.UserGenreRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
 import com.tuneet.tuneetbe.global.exception.CustomException;
 import org.junit.jupiter.api.DisplayName;
@@ -14,20 +21,26 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.BeanUtils;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -41,6 +54,12 @@ class UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private UserGenreRepository userGenreRepository;
+
+    @Mock
+    private GenreRepository genreRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -58,6 +77,73 @@ class UserServiceTest {
         ReflectionTestUtils.setField(user, "id", USER_ID);
         user.updateProfile(nickname, profilePicture);
         return user;
+    }
+
+    private Genre genre(Long id, GenreType genreType) {
+        Genre genre = BeanUtils.instantiateClass(Genre.class);
+        ReflectionTestUtils.setField(genre, "id", id);
+        ReflectionTestUtils.setField(genre, "genreName", genreType);
+        return genre;
+    }
+
+    @Nested
+    @DisplayName("선호 장르 교체")
+    class ReplaceGenres {
+
+        private final Set<GenreType> requested = Set.of(GenreType.K_POP, GenreType.POP);
+
+        @Test
+        @DisplayName("기존 장르를 삭제한 뒤 요청한 장르를 저장하고 반환한다")
+        void success() {
+            // given
+            User user = savedUser("튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+            given(genreRepository.findAllByGenreNameInOrderByDisplayOrderAsc(requested))
+                    .willReturn(List.of(genre(1L, GenreType.K_POP), genre(2L, GenreType.POP)));
+
+            // when
+            GenreReplaceResponse response = userService.replaceGenres(USER_ID, new GenreReplaceRequest(requested));
+
+            // then
+            InOrder inOrder = inOrder(userGenreRepository);
+            inOrder.verify(userGenreRepository).deleteAllByUserId(USER_ID);
+            inOrder.verify(userGenreRepository).saveAll(anyList());
+            assertThat(response.getGenres()).extracting("genreName")
+                    .containsExactly(GenreType.K_POP, GenreType.POP);
+            assertThat(response.getGenres()).extracting("displayName")
+                    .containsExactly("K-POP", "POP");
+        }
+
+        @Test
+        @DisplayName("DB에 없는 장르가 있으면 GENRE_NOT_FOUND 예외가 발생하고 기존 장르를 유지한다")
+        void genreNotFound() {
+            // given
+            User user = savedUser("튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+            given(genreRepository.findAllByGenreNameInOrderByDisplayOrderAsc(requested))
+                    .willReturn(List.of(genre(1L, GenreType.K_POP)));
+
+            // when & then
+            assertThatThrownBy(() -> userService.replaceGenres(USER_ID, new GenreReplaceRequest(requested)))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.GENRE_NOT_FOUND);
+
+            verify(userGenreRepository, never()).deleteAllByUserId(any());
+        }
+
+        @Test
+        @DisplayName("사용자가 없으면 USER_NOT_FOUND 예외가 발생한다")
+        void userNotFound() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> userService.replaceGenres(USER_ID, new GenreReplaceRequest(requested)))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        }
     }
 
     @Nested
@@ -157,6 +243,58 @@ class UserServiceTest {
 
             // when & then
             assertThatThrownBy(() -> userService.profileAdd(USER_ID, new ProfileAddRequest("튜니", null)))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        }
+    }
+
+    @Nested
+    @DisplayName("내 정보 조회")
+    class GetMyProfile {
+
+        @Test
+        @DisplayName("로그인한 사용자의 닉네임과 프로필 사진을 반환하고 음악 정보는 비어 있다")
+        void success() {
+            // given
+            User user = savedUser("튜니", "profile.png");
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            MyProfileResponse response = userService.getMyProfile(USER_ID);
+
+            // then
+            assertThat(response.getUserId()).isEqualTo(USER_ID);
+            assertThat(response.getNickname()).isEqualTo("튜니");
+            assertThat(response.getProfilePicture()).isEqualTo("profile.png");
+            assertThat(response.getProfileMusic()).isNull();
+            assertThat(response.getGenres()).isEmpty();
+            assertThat(response.getFavoriteArtists()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("프로필을 설정하지 않은 사용자면 닉네임과 프로필 사진이 null이다")
+        void profileNotSet() {
+            // given
+            User user = savedUser(null, null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            MyProfileResponse response = userService.getMyProfile(USER_ID);
+
+            // then
+            assertThat(response.getNickname()).isNull();
+            assertThat(response.getProfilePicture()).isNull();
+        }
+
+        @Test
+        @DisplayName("사용자가 없으면 USER_NOT_FOUND 예외가 발생한다")
+        void userNotFound() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> userService.getMyProfile(USER_ID))
                     .isInstanceOf(CustomException.class)
                     .extracting("errorCode")
                     .isEqualTo(UserErrorCode.USER_NOT_FOUND);

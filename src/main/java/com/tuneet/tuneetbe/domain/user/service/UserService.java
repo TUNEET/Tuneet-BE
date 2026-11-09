@@ -1,13 +1,21 @@
 package com.tuneet.tuneetbe.domain.user.service;
 
+import com.tuneet.tuneetbe.domain.music.dto.response.GenreResponse;
+import com.tuneet.tuneetbe.domain.music.entity.Genre;
+import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
+import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SignUpRequest;
 import com.tuneet.tuneetbe.domain.user.dto.response.EmailAvailabilityResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.GenreReplaceResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.MyProfileResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.NicknameAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.ProfileAddResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.SignUpResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
+import com.tuneet.tuneetbe.domain.user.entity.UserGenre;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
+import com.tuneet.tuneetbe.domain.user.repository.UserGenreRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
 import com.tuneet.tuneetbe.global.exception.CustomException;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +25,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +35,8 @@ import java.time.LocalDateTime;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final UserGenreRepository userGenreRepository;
+    private final GenreRepository genreRepository;
     private final PasswordEncoder passwordEncoder;
 
     // 회원가입
@@ -129,6 +141,84 @@ public class UserService {
         // 응답 반환
         return NicknameAvailabilityResponse.builder()
                 .available(available)
+                .build();
+    }
+
+    // 내 정보 조회
+    public MyProfileResponse getMyProfile(Long userId) {
+
+        // 로그인한 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 응답 세팅
+        List<GenreResponse> genreResponses = new ArrayList<>();
+        for (UserGenre userGenre : userGenreRepository.findAllWithGenreByUserId(userId)) {
+            genreResponses.add(toGenreResponse(userGenre.getGenre()));
+        }
+
+        // 응답 반환
+        return MyProfileResponse.builder()
+                .userId(user.getId())
+                .nickname(user.getNickname())
+                .profilePicture(user.getProfilePicture())
+                // TODO: 음악 데이터 연동 후 프로필 음악 조회
+                .profileMusic(null)
+                .genres(genreResponses)
+                // TODO: 음악 데이터 연동 후 좋아하는 아티스트 조회
+                .favoriteArtists(List.of())
+                .build();
+    }
+
+    // 선호 장르 교체
+    @Transactional
+    public GenreReplaceResponse replaceGenres(Long userId, GenreReplaceRequest request) {
+
+        // 로그인한 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 요청한 장르 조회
+        List<Genre> genres = genreRepository.findAllByGenreNameInOrderByDisplayOrderAsc(request.getGenres());
+
+        // 존재하지 않는 장르가 있는지 확인
+        if (genres.size() != request.getGenres().size()) {
+            log.warn("[UserService] 존재하지 않는 장르입니다.");
+            throw new CustomException(UserErrorCode.GENRE_NOT_FOUND);
+        }
+
+        // 기존 선호 장르 삭제
+        userGenreRepository.deleteAllByUserId(userId);
+
+        // 저장할 선호 장르와 응답 목록 세팅
+        List<UserGenre> userGenres = new ArrayList<>();
+        List<GenreResponse> genreResponses = new ArrayList<>();
+        for (Genre genre : genres) {
+            userGenres.add(UserGenre.builder()
+                    .user(user)
+                    .genre(genre)
+                    .build());
+            genreResponses.add(toGenreResponse(genre));
+        }
+
+        // DB 저장
+        userGenreRepository.saveAll(userGenres);
+
+        // 로그 출력
+        log.info("[UserService] 선호 장르 교체 성공: userId = {}", userId);
+
+        // 응답 반환
+        return GenreReplaceResponse.builder()
+                .genres(genreResponses)
+                .build();
+    }
+
+    // Genre 엔티티를 응답 dto로 변환
+    private GenreResponse toGenreResponse(Genre genre) {
+        return GenreResponse.builder()
+                .genreId(genre.getId())
+                .genreName(genre.getGenreName())
+                .displayName(genre.getGenreName().getDisplayName())
                 .build();
     }
 }

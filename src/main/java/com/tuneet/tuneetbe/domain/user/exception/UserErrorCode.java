@@ -13,7 +13,8 @@ public enum UserErrorCode implements BaseErrorCode {
     USER_NOT_FOUND("U4002", "존재하지 않는 사용자입니다.", HttpStatus.NOT_FOUND),
     EMAIL_DUPLICATE("U4003", "가입된 이메일입니다.", HttpStatus.CONFLICT),
     PASSWORD_MISMATCH("U4004", "올바른 비밀번호를 입력해 주세요.", HttpStatus.BAD_REQUEST),
-    NICKNAME_DUPLICATE("U4005", "중복된 닉네임입니다.", HttpStatus.CONFLICT);
+    NICKNAME_DUPLICATE("U4005", "중복된 닉네임입니다.", HttpStatus.CONFLICT),
+    GENRE_NOT_FOUND("U4006", "존재하지 않는 장르입니다.", HttpStatus.NOT_FOUND);
 
     private final String code;
     private final String message;

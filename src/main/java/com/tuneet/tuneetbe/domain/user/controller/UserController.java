@@ -1,8 +1,11 @@
 package com.tuneet.tuneetbe.domain.user.controller;
 
+import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SignUpRequest;
 import com.tuneet.tuneetbe.domain.user.dto.response.EmailAvailabilityResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.GenreReplaceResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.MyProfileResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.NicknameAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.ProfileAddResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.SignUpResponse;
@@ -86,5 +89,32 @@ public class UserController {
 
         // 응답 반환
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "닉네임 사용 가능 여부 확인 성공", response));
+    }
+
+    // 내 정보 조회
+    @Operation(summary = "내 정보 조회", description = "로그인한 사용자가 마이 화면에서 본인의 프로필을 조회하는 API")
+    @GetMapping("/users")
+    public ResponseEntity<BaseResponse<MyProfileResponse>> getMyProfile(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+
+        // service 호출
+        MyProfileResponse response = userService.getMyProfile(userDetails.getUserId());
+
+        // 응답 반혼
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "내 정보 조회 성공", response));
+    }
+
+    // 선호 장르 교체
+    @Operation(summary = "선호 장르 교체", description = "로그인한 사용자의 선호 장르를 요청한 목록으로 교체하는 API")
+    @PutMapping("/users/me/genres")
+    public ResponseEntity<BaseResponse<GenreReplaceResponse>> replaceGenres(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody GenreReplaceRequest request) {
+
+        // service 호출
+        GenreReplaceResponse response = userService.replaceGenres(userDetails.getUserId(), request);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "선호 장르 교체 성공", response));
     }
 }
