@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -54,7 +55,7 @@ public class AuthController {
 
     // 로그아웃
     @Operation(summary = "로그아웃", description = "저장된 Refresh Token을 삭제하는 API")
-    @PostMapping("/logout")
+    @DeleteMapping("/logout")
     public ResponseEntity<BaseResponse<Void>> logout(
             @AuthenticationPrincipal CustomUserDetails userDetails) {
 
