@@ -1,7 +1,6 @@
 package com.tuneet.tuneetbe.domain.user.service;
 
 import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
-import com.tuneet.tuneetbe.domain.feed.repository.FeedReactionRepository;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.dto.response.GenreResponse;
 import com.tuneet.tuneetbe.domain.music.entity.Genre;
@@ -63,7 +62,6 @@ public class UserService {
     private final UserBlockRepository userBlockRepository;
     private final FeedRepository feedRepository;
     private final FeedMessageRepository feedMessageRepository;
-    private final FeedReactionRepository feedReactionRepository;
     private final NotificationRepository notificationRepository;
     private final RoomRepository roomRepository;
     private final RoomUserRepository roomUserRepository;
@@ -419,7 +417,6 @@ public class UserService {
         }
 
         // 작성한 피드와 피드에 달린 반응, 메시지 삭제
-        feedReactionRepository.deleteAllByFeedUserId(userId);
         feedMessageRepository.deleteAllByFeedUserId(userId);
         feedRepository.deleteAllByUserId(userId);
 

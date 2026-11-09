@@ -1,7 +1,6 @@
 package com.tuneet.tuneetbe.domain.user.service;
 
 import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
-import com.tuneet.tuneetbe.domain.feed.repository.FeedReactionRepository;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.entity.Genre;
 import com.tuneet.tuneetbe.domain.music.enums.GenreType;
@@ -98,9 +97,6 @@ class UserServiceTest {
 
     @Mock
     private FeedMessageRepository feedMessageRepository;
-
-    @Mock
-    private FeedReactionRepository feedReactionRepository;
 
     @Mock
     private NotificationRepository notificationRepository;
@@ -307,8 +303,7 @@ class UserServiceTest {
             userService.deleteUser(USER_ID);
 
             // then
-            InOrder inOrder = inOrder(feedReactionRepository, feedMessageRepository, feedRepository);
-            inOrder.verify(feedReactionRepository).deleteAllByFeedUserId(USER_ID);
+            InOrder inOrder = inOrder(feedMessageRepository, feedRepository);
             inOrder.verify(feedMessageRepository).deleteAllByFeedUserId(USER_ID);
             inOrder.verify(feedRepository).deleteAllByUserId(USER_ID);
             verify(userGenreRepository).deleteAllByUserId(USER_ID);
