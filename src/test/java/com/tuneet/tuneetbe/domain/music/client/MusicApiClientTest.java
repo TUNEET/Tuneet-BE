@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -85,6 +86,44 @@ class MusicApiClientTest {
             assertThat(item.name()).isEqualTo("IU");
             assertThat(item.songCount()).isEqualTo(320);
         });
+    }
+
+    @Test
+    @DisplayName("곡 일괄 조회는 ID 목록을 POST로 보내고 응답을 변환한다")
+    void getMusics() {
+        AtomicReference<String> body = new AtomicReference<>();
+        server.createContext("/v1/musics/batch", exchange -> {
+            body.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] bytes = """
+                    {"items":[{"id":"r1","canonicalId":"c1","title":"봄날","artist":"BTS","artists":[]}],"missingIds":["r2"]}
+                    """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+
+        var response = client.getMusics(List.of("r1", "r2"));
+
+        assertThat(body.get()).isEqualTo("{\"ids\":[\"r1\",\"r2\"]}");
+        assertThat(response.items()).singleElement().satisfies(item -> assertThat(item.id()).isEqualTo("r1"));
+        assertThat(response.missingIds()).containsExactly("r2");
+    }
+
+    @Test
+    @DisplayName("아티스트 조회 결과가 없으면 빈 값을 반환한다")
+    void getArtistNotFound() {
+        respond("/v1/artists/a404", 404, "{\"status\":404,\"message\":\"not found\"}");
+
+        assertThat(client.getArtist("a404")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("아티스트 조회 응답을 변환한다")
+    void getArtist() {
+        respond("/v1/artists/a1", 200, "{\"id\":\"a1\",\"name\":\"IU\",\"disambiguation\":null,\"songCount\":3}");
+
+        assertThat(client.getArtist("a1")).hasValueSatisfying(artist -> assertThat(artist.name()).isEqualTo("IU"));
     }
 
     @Test
