@@ -36,5 +36,9 @@ cloud:
     s3:
       bucket: ${AWS_S3_BUCKET}
 
+music-api:
+  base-url: ${MUSIC_API_BASE_URL}
+  api-key: ${MUSIC_API_KEY}
+
 cors:
   allowed-origins: http://localhost:3000,http://localhost:5173
