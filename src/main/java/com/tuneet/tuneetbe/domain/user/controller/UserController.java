@@ -3,6 +3,7 @@ package com.tuneet.tuneetbe.domain.user.controller;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SignUpRequest;
 import com.tuneet.tuneetbe.domain.user.dto.response.EmailAvailabilityResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.NicknameAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.ProfileAddResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.SignUpResponse;
 import com.tuneet.tuneetbe.domain.user.service.UserService;
@@ -13,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -68,5 +70,21 @@ public class UserController {
 
         // 응답 반환
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "프로필 추가 설정 성공", response));
+    }
+
+    // 닉네임 사용 가능 여부 확인
+    @Operation(summary = "닉네임 사용 가능 여부 확인", description = "사용자가 프로필 추가 설정할때 닉네임 사용 가능 여부를 확인하는 API")
+    @GetMapping("/users/nickname/availability")
+    public ResponseEntity<BaseResponse<NicknameAvailabilityResponse>> nicknameAvailability(
+            @RequestParam
+            @NotBlank(message = "닉네임은 필수 입력값입니다.")
+            @Size(max = 50, message = "닉네임은 50자 이하여야 합니다.")
+            String nickname) {
+
+        // service 호출
+        NicknameAvailabilityResponse response = userService.nicknameAvailability(nickname);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "닉네임 사용 가능 여부 확인 성공", response));
     }
 }
