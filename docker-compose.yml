@@ -1,0 +1,49 @@
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-tuneet-backend:local}
+    build: . # 로컬 Dockerfile로 직접 빌드
+    container_name: tuneet-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080" # 호스트 컴퓨터 8080 포트를 컨테이너의 8080 포트와 매핑
+    environment:
+      - DB_HOST=mysql
+      - TZ=Asia/Seoul
+    env_file:
+      - .env
+    depends_on:
+      mysql: # mysql 이라는 service에 의존
+        condition: service_healthy # mysql이 healthy(정상 작동) 백엔드 컨테이너가 실행
+    networks:
+      - tuneet-network # mysql과 같은 네트워크 사용
+
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    ports:
+      # 내 컴퓨터에서만 3306으로 접속 허용
+      - "127.0.0.1:3306:3306" # 호스트 컴퓨터 3306 포트와 컨테이너의 MySQL 3306 포트를 매핑
+    environment:
+      - MYSQL_DATABASE=tuneet_db  # 초기 생성될 데이터베이스 이름
+      - MYSQL_ROOT_PASSWORD=${DB_PASSWORD}  # 루트 계정의 비밀번호
+      - TZ=Asia/Seoul
+      - LANG=C.UTF-8
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD}" ]
+      interval: 5s # 5초 간격으로 체크
+      timeout: 5s
+      retries: 10 # 10번까지 재시도
+    networks:
+      - tuneet-network # Spring Boot와 같은 네트워크에 있기 때문에 mysql 이름으로 접근
+
+networks:
+  tuneet-network:
+    driver: bridge # Docker 기본 브리지 네트워크를 사용
+
+volumes:
+  mysql-data:
