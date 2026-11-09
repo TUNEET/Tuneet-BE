@@ -19,9 +19,8 @@ public class Artist {
     @Column(nullable = false)
     private String name; // 아티스트 이름
 
-    @Column(nullable = false)
     private String artistImage; // 아티스트 이미지
 
-    @Column(unique = true)
+    @Column(nullable = false, unique = true)
     private String externalId; // 외부 음원 서비스 ID
 }

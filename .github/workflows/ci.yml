@@ -46,3 +46,5 @@ jobs:
           AWS_ACCESS_KEY: ci-test-access-key
           AWS_SECRET_KEY: ci-test-secret-key
           AWS_S3_BUCKET: ci-test-bucket
+          MUSIC_API_BASE_URL: http://localhost:8001
+          MUSIC_API_KEY: ci-test-music-api-key
