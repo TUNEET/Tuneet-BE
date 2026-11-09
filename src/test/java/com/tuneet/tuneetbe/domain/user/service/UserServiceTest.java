@@ -1,8 +1,19 @@
 package com.tuneet.tuneetbe.domain.user.service;
 
+import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
+import com.tuneet.tuneetbe.domain.feed.repository.FeedReactionRepository;
+import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.entity.Genre;
 import com.tuneet.tuneetbe.domain.music.enums.GenreType;
 import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
+import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository;
+import com.tuneet.tuneetbe.domain.room.entity.Room;
+import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
+import com.tuneet.tuneetbe.domain.room.enums.RoomRole;
+import com.tuneet.tuneetbe.domain.room.repository.RoomPlaylistRepository;
+import com.tuneet.tuneetbe.domain.room.repository.RoomPostRepository;
+import com.tuneet.tuneetbe.domain.room.repository.RoomRepository;
+import com.tuneet.tuneetbe.domain.room.repository.RoomUserRepository;
 import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SettingsUpdateRequest;
@@ -17,7 +28,10 @@ import com.tuneet.tuneetbe.domain.user.dto.response.UserProfileResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.entity.UserGenre;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
+import com.tuneet.tuneetbe.domain.user.repository.UserArtistRepository;
+import com.tuneet.tuneetbe.domain.user.repository.UserBlockRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserGenreRepository;
+import com.tuneet.tuneetbe.domain.user.repository.UserMusicRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserPlatformRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
 import com.tuneet.tuneetbe.global.exception.CustomException;
@@ -43,6 +57,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
@@ -68,6 +83,39 @@ class UserServiceTest {
 
     @Mock
     private UserPlatformRepository userPlatformRepository;
+
+    @Mock
+    private UserArtistRepository userArtistRepository;
+
+    @Mock
+    private UserMusicRepository userMusicRepository;
+
+    @Mock
+    private UserBlockRepository userBlockRepository;
+
+    @Mock
+    private FeedRepository feedRepository;
+
+    @Mock
+    private FeedMessageRepository feedMessageRepository;
+
+    @Mock
+    private FeedReactionRepository feedReactionRepository;
+
+    @Mock
+    private NotificationRepository notificationRepository;
+
+    @Mock
+    private RoomRepository roomRepository;
+
+    @Mock
+    private RoomUserRepository roomUserRepository;
+
+    @Mock
+    private RoomPostRepository roomPostRepository;
+
+    @Mock
+    private RoomPlaylistRepository roomPlaylistRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -116,9 +164,9 @@ class UserServiceTest {
             Genre rock = genre(10L, GenreType.ROCK);
 
             given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.of(targetUser));
-            given(userGenreRepository.findAllWithGenreByUserId(USER_ID))
+            given(userGenreRepository.findAllByUserIdOrderByGenreDisplayOrderAsc(USER_ID))
                     .willReturn(List.of(userGenre(loginUser, kPop), userGenre(loginUser, rock)));
-            given(userGenreRepository.findAllWithGenreByUserId(TARGET_USER_ID))
+            given(userGenreRepository.findAllByUserIdOrderByGenreDisplayOrderAsc(TARGET_USER_ID))
                     .willReturn(List.of(userGenre(targetUser, kPop), userGenre(targetUser, pop)));
 
             // when
@@ -146,9 +194,9 @@ class UserServiceTest {
             ReflectionTestUtils.setField(targetUser, "id", TARGET_USER_ID);
 
             given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.of(targetUser));
-            given(userGenreRepository.findAllWithGenreByUserId(USER_ID))
+            given(userGenreRepository.findAllByUserIdOrderByGenreDisplayOrderAsc(USER_ID))
                     .willReturn(List.of(userGenre(loginUser, genre(10L, GenreType.ROCK))));
-            given(userGenreRepository.findAllWithGenreByUserId(TARGET_USER_ID))
+            given(userGenreRepository.findAllByUserIdOrderByGenreDisplayOrderAsc(TARGET_USER_ID))
                     .willReturn(List.of(userGenre(targetUser, genre(1L, GenreType.K_POP))));
 
             // when
@@ -157,6 +205,22 @@ class UserServiceTest {
             // then
             assertThat(response.getGenres()).hasSize(1);
             assertThat(response.getCommon().getGenres()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("탈퇴한 사용자를 조회하면 USER_NOT_FOUND 예외가 발생한다")
+        void deletedUser() {
+            // given
+            User targetUser = savedUser("산책하는 튜니", null);
+            ReflectionTestUtils.setField(targetUser, "id", TARGET_USER_ID);
+            targetUser.deleteUser(LocalDateTime.now());
+            given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.of(targetUser));
+
+            // when & then
+            assertThatThrownBy(() -> userService.getUserProfile(USER_ID, TARGET_USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.USER_NOT_FOUND);
         }
 
         @Test
@@ -179,6 +243,162 @@ class UserServiceTest {
 
             // when & then
             assertThatThrownBy(() -> userService.getUserProfile(USER_ID, TARGET_USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        }
+    }
+
+    @Nested
+    @DisplayName("회원탈퇴")
+    class DeleteUser {
+
+        private static final Long ROOM_ID = 10L;
+
+        private User deletableUser() {
+            User user = User.builder()
+                    .email("test01@email.com")
+                    .password("encoded-password")
+                    .termsAgreedAt(LocalDateTime.now())
+                    .privacyAgreedAt(LocalDateTime.now())
+                    .build();
+            ReflectionTestUtils.setField(user, "id", USER_ID);
+            user.updateProfile("튜니", "profile.png");
+            user.updateRefreshToken("hash", LocalDateTime.now());
+            return user;
+        }
+
+        private RoomUser roomUser(RoomRole role) {
+            Room room = BeanUtils.instantiateClass(Room.class);
+            ReflectionTestUtils.setField(room, "id", ROOM_ID);
+            RoomUser roomUser = BeanUtils.instantiateClass(RoomUser.class);
+            ReflectionTestUtils.setField(roomUser, "room", room);
+            ReflectionTestUtils.setField(roomUser, "role", role);
+            return roomUser;
+        }
+
+        @Test
+        @DisplayName("개인정보를 파기하고 탈퇴 일시를 저장한다")
+        void destroyPersonalInformation() {
+            // given
+            User user = deletableUser();
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            userService.deleteUser(USER_ID);
+
+            // then
+            assertThat(user.getDeletedAt()).isNotNull();
+            assertThat(user.getEmail()).startsWith("deleted_1_").endsWith("@deleted.tuneet");
+            assertThat(user.getPassword()).isNotEqualTo("encoded-password");
+            assertThat(user.getNickname()).isNull();
+            assertThat(user.getProfilePicture()).isNull();
+            assertThat(user.getRefreshTokenHash()).isNull();
+            verify(userRepository).saveAndFlush(user);
+        }
+
+        @Test
+        @DisplayName("피드는 자식 데이터부터 삭제하고 연관 데이터와 받은 알림을 삭제한다")
+        void deleteRelatedData() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(deletableUser()));
+
+            // when
+            userService.deleteUser(USER_ID);
+
+            // then
+            InOrder inOrder = inOrder(feedReactionRepository, feedMessageRepository, feedRepository);
+            inOrder.verify(feedReactionRepository).deleteAllByFeedUserId(USER_ID);
+            inOrder.verify(feedMessageRepository).deleteAllByFeedUserId(USER_ID);
+            inOrder.verify(feedRepository).deleteAllByUserId(USER_ID);
+            verify(userGenreRepository).deleteAllByUserId(USER_ID);
+            verify(userArtistRepository).deleteAllByUserId(USER_ID);
+            verify(userMusicRepository).deleteAllByUserId(USER_ID);
+            verify(userPlatformRepository).deleteAllByUserId(USER_ID);
+            verify(userBlockRepository).deleteAllByBlockerIdOrBlockedId(USER_ID, USER_ID);
+            verify(notificationRepository).deleteAllByReceiverId(USER_ID);
+            verify(roomUserRepository).deleteAllByUserId(USER_ID);
+        }
+
+        @Test
+        @DisplayName("방장이고 다른 멤버가 있으면 가장 먼저 참여한 멤버에게 위임하고 방을 유지한다")
+        void delegateOwner() {
+            // given
+            RoomUser nextOwner = roomUser(RoomRole.MEMBER);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(deletableUser()));
+            given(roomUserRepository.findAllByUserId(USER_ID)).willReturn(List.of(roomUser(RoomRole.OWNER)));
+            given(roomUserRepository.findFirstByRoomIdAndUserIdNotOrderByIdAsc(ROOM_ID, USER_ID))
+                    .willReturn(Optional.of(nextOwner));
+
+            // when
+            userService.deleteUser(USER_ID);
+
+            // then
+            assertThat(nextOwner.getRole()).isEqualTo(RoomRole.OWNER);
+            verify(roomRepository, never()).deleteById(any());
+        }
+
+        @Test
+        @DisplayName("방장이고 다른 멤버가 없으면 방의 자식 데이터부터 삭제하고 방을 삭제한다")
+        void deleteEmptyRoom() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(deletableUser()));
+            given(roomUserRepository.findAllByUserId(USER_ID)).willReturn(List.of(roomUser(RoomRole.OWNER)));
+            given(roomUserRepository.findFirstByRoomIdAndUserIdNotOrderByIdAsc(ROOM_ID, USER_ID))
+                    .willReturn(Optional.empty());
+
+            // when
+            userService.deleteUser(USER_ID);
+
+            // then
+            InOrder inOrder = inOrder(roomPostRepository, roomPlaylistRepository, roomUserRepository, roomRepository);
+            inOrder.verify(roomPostRepository).deleteAllByRoomId(ROOM_ID);
+            inOrder.verify(roomPlaylistRepository).deleteAllByRoomId(ROOM_ID);
+            inOrder.verify(roomUserRepository).deleteAllByRoomId(ROOM_ID);
+            inOrder.verify(roomRepository).deleteById(ROOM_ID);
+        }
+
+        @Test
+        @DisplayName("방장이 아니면 위임하지 않고 멤버 정보만 삭제한다")
+        void memberOnly() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(deletableUser()));
+            given(roomUserRepository.findAllByUserId(USER_ID)).willReturn(List.of(roomUser(RoomRole.MEMBER)));
+
+            // when
+            userService.deleteUser(USER_ID);
+
+            // then
+            verify(roomUserRepository, never()).findFirstByRoomIdAndUserIdNotOrderByIdAsc(anyLong(), anyLong());
+            verify(roomRepository, never()).deleteById(any());
+            verify(roomUserRepository).deleteAllByUserId(USER_ID);
+        }
+
+        @Test
+        @DisplayName("이미 탈퇴한 사용자면 USER_NOT_FOUND 예외가 발생하고 삭제하지 않는다")
+        void alreadyDeleted() {
+            // given
+            User user = deletableUser();
+            user.deleteUser(LocalDateTime.now());
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when & then
+            assertThatThrownBy(() -> userService.deleteUser(USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+
+            verify(feedRepository, never()).deleteAllByUserId(any());
+        }
+
+        @Test
+        @DisplayName("사용자가 없으면 USER_NOT_FOUND 예외가 발생한다")
+        void userNotFound() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> userService.deleteUser(USER_ID))
                     .isInstanceOf(CustomException.class)
                     .extracting("errorCode")
                     .isEqualTo(UserErrorCode.USER_NOT_FOUND);
@@ -404,6 +624,7 @@ class UserServiceTest {
             // then
             InOrder inOrder = inOrder(userGenreRepository);
             inOrder.verify(userGenreRepository).deleteAllByUserId(USER_ID);
+            inOrder.verify(userGenreRepository).flush();
             inOrder.verify(userGenreRepository).saveAll(anyList());
             assertThat(response.getGenres()).extracting("genreName")
                     .containsExactly(GenreType.K_POP, GenreType.POP);

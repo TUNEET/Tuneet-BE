@@ -29,4 +29,9 @@ public class RoomUser {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private RoomRole role; // 방장 / 멤버
+
+    // 방장 위임
+    public void delegateOwner() {
+        this.role = RoomRole.OWNER;
+    }
 }

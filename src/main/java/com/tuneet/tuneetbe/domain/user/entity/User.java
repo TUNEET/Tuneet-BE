@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "users")
@@ -57,6 +58,8 @@ public class User extends BaseTimeEntity {
     private String refreshTokenHash; // Refresh Token 해시값
 
     private LocalDateTime refreshTokenExpiresAt; // Refresh Token 만료 일시
+
+    private LocalDateTime deletedAt; // 탈퇴 일시
 
     @Builder
     private User(String email, String password, LocalDateTime termsAgreedAt, LocalDateTime privacyAgreedAt, LocalDateTime locationAgreedAt) {
@@ -110,5 +113,26 @@ public class User extends BaseTimeEntity {
         this.latitude = null;
         this.longitude = null;
         this.locationVisible = false;
+    }
+
+    // 회원탈퇴 (개인정보를 파기하고 탈퇴 일시 저장)
+    public void deleteUser(LocalDateTime deletedAt) {
+        this.email = "deleted_" + this.id + "_" + UUID.randomUUID() + "@deleted.tuneet";
+        this.password = "DELETED";
+        this.nickname = null;
+        this.profilePicture = null;
+        this.profileMusic = null;
+        this.latitude = null;
+        this.longitude = null;
+        this.locationAgreedAt = null;
+        this.locationVisible = false;
+        this.letterReceivable = false;
+        this.deletedAt = deletedAt;
+        clearRefreshToken();
+    }
+
+    // 탈퇴한 사용자인지 확인
+    public boolean isDeleted() {
+        return this.deletedAt != null;
     }
 }
