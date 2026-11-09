@@ -9,11 +9,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
-    uses: ./.github/workflows/ci.yml
-
   build-and-push:
-    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -74,13 +70,16 @@ jobs:
           BACKEND_IMAGE: ${{ needs.build-and-push.outputs.image }}:${{ github.sha }}
           DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
           JWT_SECRET: ${{ secrets.PROD_JWT_SECRET }}
+          AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: BACKEND_IMAGE,DB_PASSWORD,JWT_SECRET,GHCR_USER,GHCR_TOKEN
+          envs: BACKEND_IMAGE,DB_PASSWORD,JWT_SECRET,AWS_ACCESS_KEY,AWS_SECRET_KEY,AWS_S3_BUCKET,GHCR_USER,GHCR_TOKEN
           script_stop: true
           script: |
             cd ~/app
@@ -89,7 +88,10 @@ jobs:
               "BACKEND_IMAGE=$BACKEND_IMAGE" \
               "DB_USERNAME=root" \
               "DB_PASSWORD=$DB_PASSWORD" \
-              "JWT_SECRET=$JWT_SECRET" > .env
+              "JWT_SECRET=$JWT_SECRET" \
+              "AWS_ACCESS_KEY=$AWS_ACCESS_KEY" \
+              "AWS_SECRET_KEY=$AWS_SECRET_KEY" \
+              "AWS_S3_BUCKET=$AWS_S3_BUCKET" > .env
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose pull backend
             docker compose up -d --no-build

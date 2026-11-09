@@ -12,6 +12,9 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -68,6 +71,35 @@ public class GlobalExceptionHandler {
         log.warn("요청 파라미터 검증 실패: {}", message);
         return ResponseEntity.badRequest()
                 .body(BaseResponse.error(GlobalErrorCode.INVALID_INPUT_VALUE.getCode(), message));
+    }
+
+    // 요청 값의 타입이 올바르지 않을 때
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<BaseResponse<?>> handleMethodArgumentTypeMismatchException(
+            MethodArgumentTypeMismatchException ex) {
+        String message = String.format("요청 값 '%s'이(가) 올바르지 않습니다.", ex.getName());
+        log.warn("요청 값 타입 오류: {}", ex.getName());
+        return ResponseEntity.badRequest()
+                .body(BaseResponse.error(GlobalErrorCode.INVALID_INPUT_VALUE.getCode(), message));
+    }
+
+    // 업로드 파일이 누락되었을 때
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<BaseResponse<?>> handleMissingServletRequestPartException(
+            MissingServletRequestPartException ex) {
+        String message = String.format("필수 요청 값 '%s'이(가) 누락되었습니다.", ex.getRequestPartName());
+        log.warn("요청 파일 누락: {}", ex.getRequestPartName());
+        return ResponseEntity.badRequest()
+                .body(BaseResponse.error(GlobalErrorCode.INVALID_INPUT_VALUE.getCode(), message));
+    }
+
+    // 업로드 파일 크기를 초과했을 때
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<BaseResponse<?>> handleMaxUploadSizeExceededException(
+            MaxUploadSizeExceededException ex) {
+        log.warn("업로드 파일 크기 초과");
+        return ResponseEntity.badRequest()
+                .body(BaseResponse.error(GlobalErrorCode.INVALID_INPUT_VALUE.getCode(), "이미지 크기는 5MB 이하여야 합니다."));
     }
 
     // 예상치 못한 예외

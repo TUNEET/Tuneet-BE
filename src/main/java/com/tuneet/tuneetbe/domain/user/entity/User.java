@@ -76,4 +76,13 @@ public class User extends BaseTimeEntity {
         this.refreshTokenHash = null;
         this.refreshTokenExpiresAt = null;
     }
+
+    public void updateProfile(String nickname, String profilePicture) {
+        if (nickname != null) {
+            this.nickname = nickname;
+        }
+        if (profilePicture != null) {
+            this.profilePicture = profilePicture;
+        }
+    }
 }
