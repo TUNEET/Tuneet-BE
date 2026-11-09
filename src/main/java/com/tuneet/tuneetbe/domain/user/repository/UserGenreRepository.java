@@ -14,6 +14,5 @@ public interface UserGenreRepository extends JpaRepository<UserGenre, Long> {
     List<UserGenre> findAllByUserIdOrderByGenreDisplayOrderAsc(Long userId);
 
     // 사용자의 선호 장르 전체 삭제
-    // 호출 즉시 DELETE를 실행하지 않고 flush 시점에 실행
     void deleteAllByUserId(Long userId);
 }

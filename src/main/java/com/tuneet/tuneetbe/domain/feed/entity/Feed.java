@@ -5,6 +5,7 @@ import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.global.common.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -27,5 +28,13 @@ public class Feed extends BaseTimeEntity {
     @JoinColumn(name = "music_id", nullable = false)
     private Music music; // 게시할 노래
 
+    @Column(nullable = false)
     private String content; // 코멘트 (최대 100자)
+
+    @Builder
+    private Feed(User user, Music music, String content) {
+        this.user = user;
+        this.music = music;
+        this.content = content;
+    }
 }
