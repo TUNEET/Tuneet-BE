@@ -1,11 +1,15 @@
 package com.tuneet.tuneetbe.domain.user.controller;
 
+import com.tuneet.tuneetbe.domain.user.dto.request.ArtistReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
+import com.tuneet.tuneetbe.domain.user.dto.request.MusicReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SettingsUpdateRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SignUpRequest;
+import com.tuneet.tuneetbe.domain.user.dto.response.ArtistReplaceResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.EmailAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.GenreReplaceResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.MusicReplaceResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.MyProfileResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.NicknameAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.ProfileAddResponse;
@@ -13,6 +17,7 @@ import com.tuneet.tuneetbe.domain.user.dto.response.SettingsResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.SignUpResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.UserProfileResponse;
 import com.tuneet.tuneetbe.domain.user.service.UserService;
+import com.tuneet.tuneetbe.domain.user.service.UserTasteService;
 import com.tuneet.tuneetbe.global.common.BaseResponse;
 import com.tuneet.tuneetbe.global.security.CustomUserDetails;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,6 +39,7 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
     private final UserService userService;
+    private final UserTasteService userTasteService;
 
     // 회원가입
     @Operation(summary = "회원가입", description = "이메일, 비밀번호를 입력받아 사용자를 생성하는 API")
@@ -119,6 +125,34 @@ public class UserController {
 
         // 응답 반환
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "선호 장르 교체 성공", response));
+    }
+
+    // 좋아하는 노래 교체
+    @Operation(summary = "좋아하는 노래 교체", description = "로그인한 사용자의 좋아하는 노래를 요청한 목록으로 교체하는 API")
+    @PutMapping("/users/me/musics")
+    public ResponseEntity<BaseResponse<MusicReplaceResponse>> replaceMusics(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody MusicReplaceRequest request) {
+
+        // service 호출
+        MusicReplaceResponse response = userTasteService.replaceMusics(userDetails.getUserId(), request);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "좋아하는 노래 교체 성공", response));
+    }
+
+    // 선호 아티스트 교체
+    @Operation(summary = "선호 아티스트 교체", description = "로그인한 사용자의 선호 아티스트를 요청한 목록으로 교체하는 API")
+    @PutMapping("/users/me/artists")
+    public ResponseEntity<BaseResponse<ArtistReplaceResponse>> replaceArtists(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody ArtistReplaceRequest request) {
+
+        // service 호출
+        ArtistReplaceResponse response = userTasteService.replaceArtists(userDetails.getUserId(), request);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "선호 아티스트 교체 성공", response));
     }
 
     // 설정 조회
