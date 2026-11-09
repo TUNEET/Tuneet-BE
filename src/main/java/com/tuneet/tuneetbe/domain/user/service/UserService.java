@@ -206,8 +206,8 @@ public class UserService {
     @Transactional
     public GenreReplaceResponse replaceGenres(Long userId, GenreReplaceRequest request) {
 
-        // 로그인한 사용자 조회
-        User user = userRepository.findById(userId)
+        // 같은 사용자의 중복 요청이 순서대로 처리되도록 사용자 행을 잠그고 조회
+        User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
         // 요청한 장르 조회
@@ -219,27 +219,36 @@ public class UserService {
             throw new CustomException(UserErrorCode.GENRE_NOT_FOUND);
         }
 
-        // 기존 선호 장르 삭제
-        userGenreRepository.deleteAllByUserId(userId);
+        // 현재 선호 장르 조회
+        List<UserGenre> currentUserGenres = userGenreRepository.findAllByUserIdOrderByGenreDisplayOrderAsc(userId);
 
-        // 삭제를 먼저 DB에 반영
-        // flush 시점에 Hibernate는 INSERT를 DELETE보다 먼저 실행
-        // 이미 선택했던 장르를 다시 저장하면 기존 행이 남아 있는 상태로 INSERT되어 user_genres의 (user_id, genre_id) 유니크 제약에 걸리므로, 저장 전에 DELETE를 실행
-        userGenreRepository.flush();
+        // 요청에 없는 장르는 삭제 대상, 현재 장르 id는 추가 대상 비교에 사용
+        Set<Long> currentGenreIds = new HashSet<>();
+        List<UserGenre> removedUserGenres = new ArrayList<>();
+        for (UserGenre userGenre : currentUserGenres) {
+            currentGenreIds.add(userGenre.getGenre().getId());
 
-        // 저장할 선호 장르와 응답 목록 세팅
-        List<UserGenre> userGenres = new ArrayList<>();
+            if (!request.getGenres().contains(userGenre.getGenre().getGenreName())) {
+                removedUserGenres.add(userGenre);
+            }
+        }
+
+        // 현재 없는 장르만 추가 대상으로 세팅하고 응답 목록 세팅
+        List<UserGenre> addedUserGenres = new ArrayList<>();
         List<GenreResponse> genreResponses = new ArrayList<>();
         for (Genre genre : genres) {
-            userGenres.add(UserGenre.builder()
-                    .user(user)
-                    .genre(genre)
-                    .build());
+            if (!currentGenreIds.contains(genre.getId())) {
+                addedUserGenres.add(UserGenre.builder()
+                        .user(user)
+                        .genre(genre)
+                        .build());
+            }
             genreResponses.add(toGenreResponse(genre));
         }
 
-        // DB 저장
-        userGenreRepository.saveAll(userGenres);
+        // 달라진 장르만 삭제 및 추가
+        userGenreRepository.deleteAllInBatch(removedUserGenres);
+        userGenreRepository.saveAll(addedUserGenres);
 
         // 로그 출력
         log.info("[UserService] 선호 장르 교체 성공: userId = {}", userId);

@@ -607,29 +607,62 @@ class UserServiceTest {
     @DisplayName("선호 장르 교체")
     class ReplaceGenres {
 
-        private final Set<GenreType> requested = Set.of(GenreType.K_POP, GenreType.POP);
+        private final Set<GenreType> requested = Set.of(GenreType.K_POP, GenreType.ROCK);
+
+        private UserGenre userGenre(User user, Genre genre) {
+            return UserGenre.builder().user(user).genre(genre).build();
+        }
 
         @Test
-        @DisplayName("기존 장르를 삭제한 뒤 요청한 장르를 저장하고 반환한다")
-        void success() {
+        @DisplayName("달라진 장르만 삭제하고 추가하며, 유지되는 장르는 건드리지 않는다")
+        void onlyChangedGenres() {
             // given
             User user = savedUser("튜니", null);
-            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+            Genre kPop = genre(1L, GenreType.K_POP);
+            Genre pop = genre(2L, GenreType.POP);
+            Genre rock = genre(10L, GenreType.ROCK);
+            UserGenre keptGenre = userGenre(user, kPop);
+            UserGenre removedGenre = userGenre(user, pop);
+            given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(user));
             given(genreRepository.findAllByGenreNameInOrderByDisplayOrderAsc(requested))
-                    .willReturn(List.of(genre(1L, GenreType.K_POP), genre(2L, GenreType.POP)));
+                    .willReturn(List.of(kPop, rock));
+            given(userGenreRepository.findAllByUserIdOrderByGenreDisplayOrderAsc(USER_ID))
+                    .willReturn(List.of(keptGenre, removedGenre));
 
             // when
             GenreReplaceResponse response = userService.replaceGenres(USER_ID, new GenreReplaceRequest(requested));
 
             // then
-            InOrder inOrder = inOrder(userGenreRepository);
-            inOrder.verify(userGenreRepository).deleteAllByUserId(USER_ID);
-            inOrder.verify(userGenreRepository).flush();
-            inOrder.verify(userGenreRepository).saveAll(anyList());
+            verify(userGenreRepository).deleteAllInBatch(List.of(removedGenre));
+            ArgumentCaptor<List<UserGenre>> captor = ArgumentCaptor.forClass(List.class);
+            verify(userGenreRepository).saveAll(captor.capture());
+            assertThat(captor.getValue()).extracting("genre").containsExactly(rock);
             assertThat(response.getGenres()).extracting("genreName")
-                    .containsExactly(GenreType.K_POP, GenreType.POP);
+                    .containsExactly(GenreType.K_POP, GenreType.ROCK);
             assertThat(response.getGenres()).extracting("displayName")
-                    .containsExactly("K-POP", "POP");
+                    .containsExactly("K-POP", "ROCK");
+        }
+
+        @Test
+        @DisplayName("신규 사용자는 삭제할 장르 없이 요청한 장르를 모두 추가한다")
+        void newUser() {
+            // given
+            User user = savedUser("튜니", null);
+            Genre kPop = genre(1L, GenreType.K_POP);
+            Genre rock = genre(10L, GenreType.ROCK);
+            given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(user));
+            given(genreRepository.findAllByGenreNameInOrderByDisplayOrderAsc(requested))
+                    .willReturn(List.of(kPop, rock));
+            given(userGenreRepository.findAllByUserIdOrderByGenreDisplayOrderAsc(USER_ID)).willReturn(List.of());
+
+            // when
+            userService.replaceGenres(USER_ID, new GenreReplaceRequest(requested));
+
+            // then
+            verify(userGenreRepository).deleteAllInBatch(List.of());
+            ArgumentCaptor<List<UserGenre>> captor = ArgumentCaptor.forClass(List.class);
+            verify(userGenreRepository).saveAll(captor.capture());
+            assertThat(captor.getValue()).extracting("genre").containsExactly(kPop, rock);
         }
 
         @Test
@@ -637,7 +670,7 @@ class UserServiceTest {
         void genreNotFound() {
             // given
             User user = savedUser("튜니", null);
-            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+            given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(user));
             given(genreRepository.findAllByGenreNameInOrderByDisplayOrderAsc(requested))
                     .willReturn(List.of(genre(1L, GenreType.K_POP)));
 
@@ -647,14 +680,15 @@ class UserServiceTest {
                     .extracting("errorCode")
                     .isEqualTo(UserErrorCode.GENRE_NOT_FOUND);
 
-            verify(userGenreRepository, never()).deleteAllByUserId(any());
+            verify(userGenreRepository, never()).deleteAllInBatch(any());
+            verify(userGenreRepository, never()).saveAll(any());
         }
 
         @Test
         @DisplayName("사용자가 없으면 USER_NOT_FOUND 예외가 발생한다")
         void userNotFound() {
             // given
-            given(userRepository.findById(USER_ID)).willReturn(Optional.empty());
+            given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.empty());
 
             // when & then
             assertThatThrownBy(() -> userService.replaceGenres(USER_ID, new GenreReplaceRequest(requested)))
