@@ -1,7 +1,10 @@
 package com.tuneet.tuneetbe.domain.feed.service;
 
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedCreateResponse;
+import com.tuneet.tuneetbe.domain.feed.dto.response.FeedDetailResponse;
+import com.tuneet.tuneetbe.domain.feed.dto.response.FeedListResponse;
 import com.tuneet.tuneetbe.domain.feed.entity.Feed;
+import com.tuneet.tuneetbe.domain.feed.exception.FeedErrorCode;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.user.entity.User;
@@ -17,9 +20,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,6 +39,7 @@ import static org.mockito.Mockito.verify;
 class FeedServiceTest {
 
     private static final Long USER_ID = 1L;
+    private static final Long OTHER_USER_ID = 2L;
     private static final Long FEED_ID = 100L;
     private static final Long MUSIC_ID = 10L;
     private static final String CONTENT = "이 노래 너무 좋아요!";
@@ -119,6 +126,136 @@ class FeedServiceTest {
                     .isEqualTo(UserErrorCode.USER_NOT_FOUND);
 
             verify(feedRepository, never()).save(any(Feed.class));
+        }
+    }
+
+    private User writer(Long id, String nickname, String profilePicture) {
+        User user = savedUser();
+        ReflectionTestUtils.setField(user, "id", id);
+        user.updateProfile(nickname, profilePicture);
+        return user;
+    }
+
+    private Feed savedFeed(Long id, User writer) {
+        Feed feed = Feed.builder()
+                .user(writer)
+                .music(savedMusic())
+                .content(CONTENT)
+                .build();
+        ReflectionTestUtils.setField(feed, "id", id);
+        return feed;
+    }
+
+    @Nested
+    @DisplayName("피드 상세보기")
+    class GetFeed {
+
+        @Test
+        @DisplayName("내가 작성한 피드면 isMine이 true이고 피드 정보를 반환한다")
+        void myFeed() {
+            // given
+            given(feedRepository.findById(FEED_ID))
+                    .willReturn(Optional.of(savedFeed(FEED_ID, writer(USER_ID, "튜니", "profile.png"))));
+
+            // when
+            FeedDetailResponse response = feedService.getFeed(USER_ID, FEED_ID);
+
+            // then
+            assertThat(response.getFeedId()).isEqualTo(FEED_ID);
+            assertThat(response.getNickname()).isEqualTo("튜니");
+            assertThat(response.getProfilePicture()).isEqualTo("profile.png");
+            assertThat(response.getContent()).isEqualTo(CONTENT);
+            assertThat(response.getMusic().getMusicId()).isEqualTo(MUSIC_ID);
+            assertThat(response.getIsMine()).isTrue();
+        }
+
+        @Test
+        @DisplayName("다른 사용자의 피드면 isMine이 false이고 작성자의 정보를 반환한다")
+        void otherUserFeed() {
+            // given
+            given(feedRepository.findById(FEED_ID))
+                    .willReturn(Optional.of(savedFeed(FEED_ID, writer(OTHER_USER_ID, "산책하는 튜니", "other.png"))));
+
+            // when
+            FeedDetailResponse response = feedService.getFeed(USER_ID, FEED_ID);
+
+            // then
+            assertThat(response.getNickname()).isEqualTo("산책하는 튜니");
+            assertThat(response.getProfilePicture()).isEqualTo("other.png");
+            assertThat(response.getIsMine()).isFalse();
+        }
+
+        @Test
+        @DisplayName("피드가 없으면 FEED_NOT_FOUND 예외가 발생한다")
+        void feedNotFound() {
+            // given
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> feedService.getFeed(USER_ID, FEED_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(FeedErrorCode.FEED_NOT_FOUND);
+        }
+    }
+
+    @Nested
+    @DisplayName("피드 리스트 보기")
+    class GetFeeds {
+
+        private static final int SIZE = 2;
+        private final PageRequest pageable = PageRequest.of(0, SIZE);
+
+        @Test
+        @DisplayName("커서가 없으면 최신 피드부터 조회하고 다음 피드 여부를 반환한다")
+        void firstPage() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            User other = writer(OTHER_USER_ID, "산책하는 튜니", null);
+            given(feedRepository.findAllByOrderByIdDesc(pageable)).willReturn(
+                    new SliceImpl<>(List.of(savedFeed(3L, me), savedFeed(2L, other)), pageable, true));
+
+            // when
+            FeedListResponse response = feedService.getFeeds(USER_ID, null, SIZE);
+
+            // then
+            assertThat(response.getFeeds()).extracting("feedId").containsExactly(3L, 2L);
+            assertThat(response.getFeeds()).extracting("isMine").containsExactly(true, false);
+            assertThat(response.getFeeds()).extracting("nickname").containsExactly("튜니", "산책하는 튜니");
+            assertThat(response.getHasNext()).isTrue();
+            verify(feedRepository, never()).findByIdLessThanOrderByIdDesc(any(), any());
+        }
+
+        @Test
+        @DisplayName("커서가 있으면 커서보다 이전 피드를 조회한다")
+        void nextPage() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            given(feedRepository.findByIdLessThanOrderByIdDesc(2L, pageable)).willReturn(
+                    new SliceImpl<>(List.of(savedFeed(1L, me)), pageable, false));
+
+            // when
+            FeedListResponse response = feedService.getFeeds(USER_ID, 2L, SIZE);
+
+            // then
+            assertThat(response.getFeeds()).extracting("feedId").containsExactly(1L);
+            assertThat(response.getHasNext()).isFalse();
+            verify(feedRepository, never()).findAllByOrderByIdDesc(any());
+        }
+
+        @Test
+        @DisplayName("피드가 없으면 빈 목록과 hasNext false를 반환한다")
+        void emptyFeeds() {
+            // given
+            given(feedRepository.findAllByOrderByIdDesc(pageable)).willReturn(
+                    new SliceImpl<>(List.of(), pageable, false));
+
+            // when
+            FeedListResponse response = feedService.getFeeds(USER_ID, null, SIZE);
+
+            // then
+            assertThat(response.getFeeds()).isEmpty();
+            assertThat(response.getHasNext()).isFalse();
         }
     }
 }

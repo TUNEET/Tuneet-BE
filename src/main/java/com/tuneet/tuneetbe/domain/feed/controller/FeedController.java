@@ -2,6 +2,8 @@ package com.tuneet.tuneetbe.domain.feed.controller;
 
 import com.tuneet.tuneetbe.domain.feed.dto.request.FeedCreateRequest;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedCreateResponse;
+import com.tuneet.tuneetbe.domain.feed.dto.response.FeedDetailResponse;
+import com.tuneet.tuneetbe.domain.feed.dto.response.FeedListResponse;
 import com.tuneet.tuneetbe.domain.feed.service.FeedService;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.music.service.MusicCatalogService;
@@ -10,14 +12,13 @@ import com.tuneet.tuneetbe.global.security.CustomUserDetails;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -44,5 +45,37 @@ public class FeedController {
 
         // 응답 반환
         return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(201, "피드 작성 성공", response));
+    }
+
+    // 피드 상세보기
+    @Operation(summary = "피드 상세보기", description = "사용자가 피드 1개를 조회할때 사용하는 API")
+    @GetMapping("/feeds/{feed-id}")
+    public ResponseEntity<BaseResponse<FeedDetailResponse>> feedDetail(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("feed-id") Long feedId) {
+
+        // service 호출
+        FeedDetailResponse response = feedService.getFeed(userDetails.getUserId(), feedId);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "피드 상세보기 조회 성공", response));
+    }
+
+    // 피드 리스트 보기
+    @Operation(summary = "피드 리스트 보기", description = "사용자가 피드 목록을 최신순으로 조회할때 사용하는 API")
+    @GetMapping("/feeds")
+    public ResponseEntity<BaseResponse<FeedListResponse>> feedList(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(required = false) Long cursor,
+            @RequestParam(defaultValue = "20")
+            @Min(value = 1, message = "size는 1 이상이어야 합니다.")
+            @Max(value = 50, message = "size는 50 이하여야 합니다.")
+            int size) {
+
+        // service 호출
+        FeedListResponse response = feedService.getFeeds(userDetails.getUserId(), cursor, size);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "피드 리스트 조회 성공", response));
     }
 }
