@@ -100,6 +100,7 @@ public class User extends BaseTimeEntity {
     public void agreeLocation(LocalDateTime agreedAt) {
         if (this.locationAgreedAt == null) {
             this.locationAgreedAt = agreedAt;
+            this.locationVisible = true;
         }
     }
 

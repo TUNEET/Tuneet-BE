@@ -262,6 +262,52 @@ class UserServiceTest {
         }
 
         @Test
+        @DisplayName("위치 동의만 보내면 위치 노출이 켜진다")
+        void agreeOnlyShowsLocation() {
+            // given
+            User user = savedUser("튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            SettingsResponse response = userService.updateSettings(USER_ID, new SettingsUpdateRequest(null, null, true));
+
+            // then
+            assertThat(user.getLocationAgreedAt()).isNotNull();
+            assertThat(user.getLocationVisible()).isTrue();
+            assertThat(response.getLocationVisible()).isTrue();
+        }
+
+        @Test
+        @DisplayName("위치 동의와 함께 위치 노출을 끄면 꺼진 상태로 저장한다")
+        void agreeAndHideLocation() {
+            // given
+            User user = savedUser("튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            SettingsResponse response = userService.updateSettings(USER_ID, new SettingsUpdateRequest(false, null, true));
+
+            // then
+            assertThat(user.getLocationAgreedAt()).isNotNull();
+            assertThat(response.getLocationVisible()).isFalse();
+        }
+
+        @Test
+        @DisplayName("철회 후 다시 동의하면 위치 노출이 켜진다")
+        void reAgreeShowsLocation() {
+            // given
+            User user = locationAgreedUser();
+            user.withdrawLocationAgreement();
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            SettingsResponse response = userService.updateSettings(USER_ID, new SettingsUpdateRequest(null, null, true));
+
+            // then
+            assertThat(response.getLocationVisible()).isTrue();
+        }
+
+        @Test
         @DisplayName("이미 동의한 사용자가 다시 동의해도 기존 동의 일시를 유지한다")
         void keepAgreedAt() {
             // given
