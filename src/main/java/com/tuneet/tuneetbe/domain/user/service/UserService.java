@@ -1,8 +1,18 @@
 package com.tuneet.tuneetbe.domain.user.service;
 
+import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
+import com.tuneet.tuneetbe.domain.feed.repository.FeedReactionRepository;
+import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.dto.response.GenreResponse;
 import com.tuneet.tuneetbe.domain.music.entity.Genre;
 import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
+import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository;
+import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
+import com.tuneet.tuneetbe.domain.room.enums.RoomRole;
+import com.tuneet.tuneetbe.domain.room.repository.RoomPlaylistRepository;
+import com.tuneet.tuneetbe.domain.room.repository.RoomPostRepository;
+import com.tuneet.tuneetbe.domain.room.repository.RoomRepository;
+import com.tuneet.tuneetbe.domain.room.repository.RoomUserRepository;
 import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SettingsUpdateRequest;
@@ -18,7 +28,10 @@ import com.tuneet.tuneetbe.domain.user.dto.response.UserProfileResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.entity.UserGenre;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
+import com.tuneet.tuneetbe.domain.user.repository.UserArtistRepository;
+import com.tuneet.tuneetbe.domain.user.repository.UserBlockRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserGenreRepository;
+import com.tuneet.tuneetbe.domain.user.repository.UserMusicRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserPlatformRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
 import com.tuneet.tuneetbe.global.exception.CustomException;
@@ -32,6 +45,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -44,6 +58,17 @@ public class UserService {
     private final UserGenreRepository userGenreRepository;
     private final GenreRepository genreRepository;
     private final UserPlatformRepository userPlatformRepository;
+    private final UserArtistRepository userArtistRepository;
+    private final UserMusicRepository userMusicRepository;
+    private final UserBlockRepository userBlockRepository;
+    private final FeedRepository feedRepository;
+    private final FeedMessageRepository feedMessageRepository;
+    private final FeedReactionRepository feedReactionRepository;
+    private final NotificationRepository notificationRepository;
+    private final RoomRepository roomRepository;
+    private final RoomUserRepository roomUserRepository;
+    private final RoomPostRepository roomPostRepository;
+    private final RoomPlaylistRepository roomPlaylistRepository;
     private final PasswordEncoder passwordEncoder;
 
     // 회원가입
@@ -160,7 +185,7 @@ public class UserService {
 
         // 응답 세팅
         List<GenreResponse> genreResponses = new ArrayList<>();
-        for (UserGenre userGenre : userGenreRepository.findAllWithGenreByUserId(userId)) {
+        for (UserGenre userGenre : userGenreRepository.findAllByUserIdOrderByGenreDisplayOrderAsc(userId)) {
             genreResponses.add(toGenreResponse(userGenre.getGenre()));
         }
 
@@ -196,6 +221,11 @@ public class UserService {
 
         // 기존 선호 장르 삭제
         userGenreRepository.deleteAllByUserId(userId);
+
+        // 삭제를 먼저 DB에 반영
+        // flush 시점에 Hibernate는 INSERT를 DELETE보다 먼저 실행
+        // 이미 선택했던 장르를 다시 저장하면 기존 행이 남아 있는 상태로 INSERT되어 user_genres의 (user_id, genre_id) 유니크 제약에 걸리므로, 저장 전에 DELETE를 실행
+        userGenreRepository.flush();
 
         // 저장할 선호 장르와 응답 목록 세팅
         List<UserGenre> userGenres = new ArrayList<>();
@@ -313,16 +343,22 @@ public class UserService {
         User targetUser = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
+        // 탈퇴한 사용자인지 확인
+        if (targetUser.isDeleted()) {
+            log.warn("[UserService] 탈퇴한 사용자입니다.");
+            throw new CustomException(UserErrorCode.USER_NOT_FOUND);
+        }
+
         // 로그인한 사용자의 선호 장르 id 조회
         Set<Long> loginUserGenreIds = new HashSet<>();
-        for (UserGenre userGenre : userGenreRepository.findAllWithGenreByUserId(loginUserId)) {
+        for (UserGenre userGenre : userGenreRepository.findAllByUserIdOrderByGenreDisplayOrderAsc(loginUserId)) {
             loginUserGenreIds.add(userGenre.getGenre().getId());
         }
 
         // 조회할 사용자의 선호 장르와 함께 좋아하는 장르 세팅
         List<GenreResponse> genreResponses = new ArrayList<>();
         List<GenreResponse> commonGenreResponses = new ArrayList<>();
-        for (UserGenre userGenre : userGenreRepository.findAllWithGenreByUserId(targetUserId)) {
+        for (UserGenre userGenre : userGenreRepository.findAllByUserIdOrderByGenreDisplayOrderAsc(targetUserId)) {
             GenreResponse genreResponse = toGenreResponse(userGenre.getGenre());
             genreResponses.add(genreResponse);
 
@@ -357,5 +393,83 @@ public class UserService {
                 .letterReceivable(targetUser.getLetterReceivable())
                 .common(common)
                 .build();
+    }
+
+    // 회원탈퇴
+    @Transactional
+    public void deleteUser(Long userId) {
+
+        // 로그인한 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 이미 탈퇴한 사용자인지 확인
+        if (user.isDeleted()) {
+            log.warn("[UserService] 이미 탈퇴한 사용자입니다.");
+            throw new CustomException(UserErrorCode.USER_NOT_FOUND);
+        }
+
+        // 작성한 피드와 피드에 달린 반응, 메시지 삭제
+        feedReactionRepository.deleteAllByFeedUserId(userId);
+        feedMessageRepository.deleteAllByFeedUserId(userId);
+        feedRepository.deleteAllByUserId(userId);
+
+        // 선호 장르, 좋아하는 아티스트, 좋아하는 노래, 음원 플랫폼 연동 정보 삭제
+        userGenreRepository.deleteAllByUserId(userId);
+        userArtistRepository.deleteAllByUserId(userId);
+        userMusicRepository.deleteAllByUserId(userId);
+        userPlatformRepository.deleteAllByUserId(userId);
+
+        // 차단 기록 삭제
+        userBlockRepository.deleteAllByBlockerIdOrBlockedId(userId, userId);
+
+        // 받은 알림 삭제
+        notificationRepository.deleteAllByReceiverId(userId);
+
+        // 방장인 방 처리
+        handleOwnedRooms(userId);
+
+        // 방 멤버 정보 삭제
+        roomUserRepository.deleteAllByUserId(userId);
+
+        // 개인정보 파기 및 탈퇴 일시 저장
+        user.deleteUser(LocalDateTime.now());
+
+        // DB 저장
+        userRepository.saveAndFlush(user);
+
+        // 로그 출력
+        log.info("[UserService] 회원탈퇴 성공: userId = {}", userId);
+    }
+
+    // 방장인 방은 가장 먼저 참여한 멤버에게 위임하고, 다른 멤버가 없으면 방 삭제
+    private void handleOwnedRooms(Long userId) {
+
+        List<RoomUser> roomUsers = roomUserRepository.findAllByUserId(userId);
+
+        for (RoomUser roomUser : roomUsers) {
+
+            // 방장이 아니면 위임하지 않음
+            if (roomUser.getRole() != RoomRole.OWNER) {
+                continue;
+            }
+
+            Long roomId = roomUser.getRoom().getId();
+
+            // 가장 먼저 참여한 멤버 조회
+            Optional<RoomUser> nextOwner = roomUserRepository.findFirstByRoomIdAndUserIdNotOrderByIdAsc(roomId, userId);
+
+            // 다른 멤버가 있으면 방장 위임
+            if (nextOwner.isPresent()) {
+                nextOwner.get().delegateOwner();
+                continue;
+            }
+
+            // 다른 멤버가 없으면 방 삭제
+            roomPostRepository.deleteAllByRoomId(roomId);
+            roomPlaylistRepository.deleteAllByRoomId(roomId);
+            roomUserRepository.deleteAllByRoomId(roomId);
+            roomRepository.deleteById(roomId);
+        }
     }
 }
