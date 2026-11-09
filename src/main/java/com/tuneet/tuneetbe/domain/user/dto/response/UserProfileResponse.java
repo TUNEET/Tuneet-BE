@@ -3,6 +3,7 @@ package com.tuneet.tuneetbe.domain.user.dto.response;
 import com.tuneet.tuneetbe.domain.music.dto.response.ArtistResponse;
 import com.tuneet.tuneetbe.domain.music.dto.response.GenreResponse;
 import com.tuneet.tuneetbe.domain.music.dto.response.MusicResponse;
+import com.tuneet.tuneetbe.domain.user.enums.DistanceRange;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -39,8 +40,8 @@ public class UserProfileResponse {
     @Schema(description = "유사도 (%)", example = "92")
     private Integer similarity;
 
-    @Schema(description = "거리 (km)", example = "1.2")
-    private Double distanceKm;
+    @Schema(description = "거리 구간", example = "WITHIN_3KM")
+    private DistanceRange distanceRange;
 
     @Schema(description = "편지 받기 여부", example = "true")
     private Boolean letterReceivable;

@@ -353,7 +353,7 @@ public class UserService {
                 // TODO: 매칭 구현 후 유사도 계산
                 .similarity(null)
                 // TODO: 위치 갱신 구현 후 거리 계산 (위치 노출을 끈 사용자는 null)
-                .distanceKm(null)
+                .distanceRange(null)
                 .letterReceivable(targetUser.getLetterReceivable())
                 .common(common)
                 .build();
