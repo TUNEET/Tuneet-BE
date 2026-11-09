@@ -32,6 +32,12 @@ public class CustomUserDetailsService implements UserDetailsService {
                 userRepository
                         .findById(userId)
                         .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다."));
+
+        // 탈퇴한 사용자의 토큰은 인증하지 않음
+        if (user.isDeleted()) {
+            throw new UsernameNotFoundException("탈퇴한 사용자입니다.");
+        }
+
         return new CustomUserDetails(user);
     }
 }
