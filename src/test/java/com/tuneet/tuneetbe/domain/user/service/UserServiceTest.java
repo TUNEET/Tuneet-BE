@@ -1,12 +1,24 @@
 package com.tuneet.tuneetbe.domain.user.service;
 
+import com.tuneet.tuneetbe.domain.music.entity.Genre;
+import com.tuneet.tuneetbe.domain.music.enums.GenreType;
+import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
+import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
+import com.tuneet.tuneetbe.domain.user.dto.request.SettingsUpdateRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SignUpRequest;
 import com.tuneet.tuneetbe.domain.user.dto.response.EmailAvailabilityResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.GenreReplaceResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.MyProfileResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.NicknameAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.ProfileAddResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.SettingsResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.UserProfileResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
+import com.tuneet.tuneetbe.domain.user.entity.UserGenre;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
+import com.tuneet.tuneetbe.domain.user.repository.UserGenreRepository;
+import com.tuneet.tuneetbe.domain.user.repository.UserPlatformRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
 import com.tuneet.tuneetbe.global.exception.CustomException;
 import org.junit.jupiter.api.DisplayName;
@@ -14,20 +26,26 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.BeanUtils;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -41,6 +59,15 @@ class UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private UserGenreRepository userGenreRepository;
+
+    @Mock
+    private GenreRepository genreRepository;
+
+    @Mock
+    private UserPlatformRepository userPlatformRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -58,6 +85,362 @@ class UserServiceTest {
         ReflectionTestUtils.setField(user, "id", USER_ID);
         user.updateProfile(nickname, profilePicture);
         return user;
+    }
+
+    private Genre genre(Long id, GenreType genreType) {
+        Genre genre = BeanUtils.instantiateClass(Genre.class);
+        ReflectionTestUtils.setField(genre, "id", id);
+        ReflectionTestUtils.setField(genre, "genreName", genreType);
+        return genre;
+    }
+
+    @Nested
+    @DisplayName("다른 사용자 프로필 조회")
+    class GetUserProfile {
+
+        private static final Long TARGET_USER_ID = 2L;
+
+        private UserGenre userGenre(User user, Genre genre) {
+            return UserGenre.builder().user(user).genre(genre).build();
+        }
+
+        @Test
+        @DisplayName("상대의 프로필과 함께 좋아하는 장르를 반환한다")
+        void success() {
+            // given
+            User loginUser = savedUser("나", null);
+            User targetUser = savedUser("산책하는 튜니", "target.png");
+            ReflectionTestUtils.setField(targetUser, "id", TARGET_USER_ID);
+            Genre kPop = genre(1L, GenreType.K_POP);
+            Genre pop = genre(2L, GenreType.POP);
+            Genre rock = genre(10L, GenreType.ROCK);
+
+            given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.of(targetUser));
+            given(userGenreRepository.findAllWithGenreByUserId(USER_ID))
+                    .willReturn(List.of(userGenre(loginUser, kPop), userGenre(loginUser, rock)));
+            given(userGenreRepository.findAllWithGenreByUserId(TARGET_USER_ID))
+                    .willReturn(List.of(userGenre(targetUser, kPop), userGenre(targetUser, pop)));
+
+            // when
+            UserProfileResponse response = userService.getUserProfile(USER_ID, TARGET_USER_ID);
+
+            // then
+            assertThat(response.getUserId()).isEqualTo(TARGET_USER_ID);
+            assertThat(response.getNickname()).isEqualTo("산책하는 튜니");
+            assertThat(response.getProfilePicture()).isEqualTo("target.png");
+            assertThat(response.getLetterReceivable()).isTrue();
+            assertThat(response.getGenres()).extracting("genreName")
+                    .containsExactly(GenreType.K_POP, GenreType.POP);
+            assertThat(response.getCommon().getGenres()).extracting("genreName")
+                    .containsExactly(GenreType.K_POP);
+            assertThat(response.getCommon().getArtists()).isEmpty();
+            assertThat(response.getCommon().getMusic()).isNull();
+        }
+
+        @Test
+        @DisplayName("겹치는 장르가 없으면 함께 좋아하는 장르는 빈 목록이다")
+        void noCommonGenres() {
+            // given
+            User loginUser = savedUser("나", null);
+            User targetUser = savedUser("산책하는 튜니", null);
+            ReflectionTestUtils.setField(targetUser, "id", TARGET_USER_ID);
+
+            given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.of(targetUser));
+            given(userGenreRepository.findAllWithGenreByUserId(USER_ID))
+                    .willReturn(List.of(userGenre(loginUser, genre(10L, GenreType.ROCK))));
+            given(userGenreRepository.findAllWithGenreByUserId(TARGET_USER_ID))
+                    .willReturn(List.of(userGenre(targetUser, genre(1L, GenreType.K_POP))));
+
+            // when
+            UserProfileResponse response = userService.getUserProfile(USER_ID, TARGET_USER_ID);
+
+            // then
+            assertThat(response.getGenres()).hasSize(1);
+            assertThat(response.getCommon().getGenres()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("본인을 조회하면 SELF_PROFILE_NOT_ALLOWED 예외가 발생하고 사용자를 조회하지 않는다")
+        void selfProfile() {
+            // when & then
+            assertThatThrownBy(() -> userService.getUserProfile(USER_ID, USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.SELF_PROFILE_NOT_ALLOWED);
+
+            verify(userRepository, never()).findById(any());
+        }
+
+        @Test
+        @DisplayName("상대가 없으면 USER_NOT_FOUND 예외가 발생한다")
+        void userNotFound() {
+            // given
+            given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> userService.getUserProfile(USER_ID, TARGET_USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        }
+    }
+
+    @Nested
+    @DisplayName("설정")
+    class Settings {
+
+        private User locationAgreedUser() {
+            User user = savedUser("튜니", null);
+            user.agreeLocation(LocalDateTime.now());
+            ReflectionTestUtils.setField(user, "latitude", 37.5);
+            ReflectionTestUtils.setField(user, "longitude", 127.0);
+            return user;
+        }
+
+        @Test
+        @DisplayName("설정 화면의 6개 항목을 반환한다")
+        void getSettings() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(locationAgreedUser()));
+            given(userPlatformRepository.existsByUserId(USER_ID)).willReturn(true);
+
+            // when
+            SettingsResponse response = userService.getSettings(USER_ID);
+
+            // then
+            assertThat(response.getLocationVisible()).isTrue();
+            assertThat(response.getLetterReceivable()).isTrue();
+            assertThat(response.getPlatformConnected()).isTrue();
+            assertThat(response.getTermsAgreed()).isTrue();
+            assertThat(response.getPrivacyAgreed()).isTrue();
+            assertThat(response.getLocationAgreed()).isTrue();
+        }
+
+        @Test
+        @DisplayName("위치 동의를 하지 않은 사용자의 위치 노출은 false로 반환한다")
+        void getSettingsWithoutLocationAgreement() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(savedUser("튜니", null)));
+
+            // when
+            SettingsResponse response = userService.getSettings(USER_ID);
+
+            // then
+            assertThat(response.getLocationVisible()).isFalse();
+            assertThat(response.getLocationAgreed()).isFalse();
+        }
+
+        @Test
+        @DisplayName("보낸 값만 변경하고 null인 값은 유지한다")
+        void updateOnlySentValues() {
+            // given
+            User user = locationAgreedUser();
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            SettingsResponse response = userService.updateSettings(USER_ID, new SettingsUpdateRequest(null, false, null));
+
+            // then
+            assertThat(response.getLetterReceivable()).isFalse();
+            assertThat(response.getLocationVisible()).isTrue();
+            assertThat(response.getLocationAgreed()).isTrue();
+        }
+
+        @Test
+        @DisplayName("위치 동의와 위치 노출을 함께 켤 수 있다")
+        void agreeAndShowLocation() {
+            // given
+            User user = savedUser("튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            SettingsResponse response = userService.updateSettings(USER_ID, new SettingsUpdateRequest(true, null, true));
+
+            // then
+            assertThat(user.getLocationAgreedAt()).isNotNull();
+            assertThat(response.getLocationVisible()).isTrue();
+        }
+
+        @Test
+        @DisplayName("위치 동의만 보내면 위치 노출이 켜진다")
+        void agreeOnlyShowsLocation() {
+            // given
+            User user = savedUser("튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            SettingsResponse response = userService.updateSettings(USER_ID, new SettingsUpdateRequest(null, null, true));
+
+            // then
+            assertThat(user.getLocationAgreedAt()).isNotNull();
+            assertThat(user.getLocationVisible()).isTrue();
+            assertThat(response.getLocationVisible()).isTrue();
+        }
+
+        @Test
+        @DisplayName("위치 동의와 함께 위치 노출을 끄면 꺼진 상태로 저장한다")
+        void agreeAndHideLocation() {
+            // given
+            User user = savedUser("튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            SettingsResponse response = userService.updateSettings(USER_ID, new SettingsUpdateRequest(false, null, true));
+
+            // then
+            assertThat(user.getLocationAgreedAt()).isNotNull();
+            assertThat(response.getLocationVisible()).isFalse();
+        }
+
+        @Test
+        @DisplayName("철회 후 다시 동의하면 위치 노출이 켜진다")
+        void reAgreeShowsLocation() {
+            // given
+            User user = locationAgreedUser();
+            user.withdrawLocationAgreement();
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            SettingsResponse response = userService.updateSettings(USER_ID, new SettingsUpdateRequest(null, null, true));
+
+            // then
+            assertThat(response.getLocationVisible()).isTrue();
+        }
+
+        @Test
+        @DisplayName("이미 동의한 사용자가 다시 동의해도 기존 동의 일시를 유지한다")
+        void keepAgreedAt() {
+            // given
+            User user = locationAgreedUser();
+            LocalDateTime agreedAt = user.getLocationAgreedAt();
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            userService.updateSettings(USER_ID, new SettingsUpdateRequest(null, null, true));
+
+            // then
+            assertThat(user.getLocationAgreedAt()).isEqualTo(agreedAt);
+        }
+
+        @Test
+        @DisplayName("위치 동의를 철회하면 위치 좌표를 지우고 위치 노출을 끈다")
+        void withdrawLocationAgreement() {
+            // given
+            User user = locationAgreedUser();
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            SettingsResponse response = userService.updateSettings(USER_ID, new SettingsUpdateRequest(null, null, false));
+
+            // then
+            assertThat(user.getLocationAgreedAt()).isNull();
+            assertThat(user.getLatitude()).isNull();
+            assertThat(user.getLongitude()).isNull();
+            assertThat(response.getLocationVisible()).isFalse();
+        }
+
+        @Test
+        @DisplayName("위치 동의 없이 위치 노출을 켜면 LOCATION_AGREEMENT_REQUIRED 예외가 발생한다")
+        void showLocationWithoutAgreement() {
+            // given
+            User user = savedUser("튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when & then
+            assertThatThrownBy(() -> userService.updateSettings(USER_ID, new SettingsUpdateRequest(true, null, null)))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.LOCATION_AGREEMENT_REQUIRED);
+        }
+
+        @Test
+        @DisplayName("위치 동의를 철회하면서 위치 노출을 켜면 예외가 발생하고 좌표를 유지한다")
+        void withdrawAndShowLocation() {
+            // given
+            User user = locationAgreedUser();
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when & then
+            assertThatThrownBy(() -> userService.updateSettings(USER_ID, new SettingsUpdateRequest(true, null, false)))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.LOCATION_AGREEMENT_REQUIRED);
+
+            assertThat(user.getLatitude()).isEqualTo(37.5);
+        }
+
+        @Test
+        @DisplayName("사용자가 없으면 USER_NOT_FOUND 예외가 발생한다")
+        void userNotFound() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> userService.getSettings(USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        }
+    }
+
+    @Nested
+    @DisplayName("선호 장르 교체")
+    class ReplaceGenres {
+
+        private final Set<GenreType> requested = Set.of(GenreType.K_POP, GenreType.POP);
+
+        @Test
+        @DisplayName("기존 장르를 삭제한 뒤 요청한 장르를 저장하고 반환한다")
+        void success() {
+            // given
+            User user = savedUser("튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+            given(genreRepository.findAllByGenreNameInOrderByDisplayOrderAsc(requested))
+                    .willReturn(List.of(genre(1L, GenreType.K_POP), genre(2L, GenreType.POP)));
+
+            // when
+            GenreReplaceResponse response = userService.replaceGenres(USER_ID, new GenreReplaceRequest(requested));
+
+            // then
+            InOrder inOrder = inOrder(userGenreRepository);
+            inOrder.verify(userGenreRepository).deleteAllByUserId(USER_ID);
+            inOrder.verify(userGenreRepository).saveAll(anyList());
+            assertThat(response.getGenres()).extracting("genreName")
+                    .containsExactly(GenreType.K_POP, GenreType.POP);
+            assertThat(response.getGenres()).extracting("displayName")
+                    .containsExactly("K-POP", "POP");
+        }
+
+        @Test
+        @DisplayName("DB에 없는 장르가 있으면 GENRE_NOT_FOUND 예외가 발생하고 기존 장르를 유지한다")
+        void genreNotFound() {
+            // given
+            User user = savedUser("튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+            given(genreRepository.findAllByGenreNameInOrderByDisplayOrderAsc(requested))
+                    .willReturn(List.of(genre(1L, GenreType.K_POP)));
+
+            // when & then
+            assertThatThrownBy(() -> userService.replaceGenres(USER_ID, new GenreReplaceRequest(requested)))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.GENRE_NOT_FOUND);
+
+            verify(userGenreRepository, never()).deleteAllByUserId(any());
+        }
+
+        @Test
+        @DisplayName("사용자가 없으면 USER_NOT_FOUND 예외가 발생한다")
+        void userNotFound() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> userService.replaceGenres(USER_ID, new GenreReplaceRequest(requested)))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        }
     }
 
     @Nested
@@ -157,6 +540,58 @@ class UserServiceTest {
 
             // when & then
             assertThatThrownBy(() -> userService.profileAdd(USER_ID, new ProfileAddRequest("튜니", null)))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        }
+    }
+
+    @Nested
+    @DisplayName("내 정보 조회")
+    class GetMyProfile {
+
+        @Test
+        @DisplayName("로그인한 사용자의 닉네임과 프로필 사진을 반환하고 음악 정보는 비어 있다")
+        void success() {
+            // given
+            User user = savedUser("튜니", "profile.png");
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            MyProfileResponse response = userService.getMyProfile(USER_ID);
+
+            // then
+            assertThat(response.getUserId()).isEqualTo(USER_ID);
+            assertThat(response.getNickname()).isEqualTo("튜니");
+            assertThat(response.getProfilePicture()).isEqualTo("profile.png");
+            assertThat(response.getProfileMusic()).isNull();
+            assertThat(response.getGenres()).isEmpty();
+            assertThat(response.getFavoriteArtists()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("프로필을 설정하지 않은 사용자면 닉네임과 프로필 사진이 null이다")
+        void profileNotSet() {
+            // given
+            User user = savedUser(null, null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+
+            // when
+            MyProfileResponse response = userService.getMyProfile(USER_ID);
+
+            // then
+            assertThat(response.getNickname()).isNull();
+            assertThat(response.getProfilePicture()).isNull();
+        }
+
+        @Test
+        @DisplayName("사용자가 없으면 USER_NOT_FOUND 예외가 발생한다")
+        void userNotFound() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> userService.getMyProfile(USER_ID))
                     .isInstanceOf(CustomException.class)
                     .extracting("errorCode")
                     .isEqualTo(UserErrorCode.USER_NOT_FOUND);
