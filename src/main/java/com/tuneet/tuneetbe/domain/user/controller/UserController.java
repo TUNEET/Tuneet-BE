@@ -8,6 +8,8 @@ import com.tuneet.tuneetbe.global.common.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,7 +40,10 @@ public class UserController {
     @Operation(summary = "이메일 사용 가능 여부 확인", description = "사용자가 회원가입할때 이메일 사용 가능 여부를 확인하는 API")
     @GetMapping("/users/email/availability")
     public ResponseEntity<BaseResponse<EmailAvailabilityResponse>> emailAvailability(
-            @RequestParam String email) {
+            @RequestParam
+            @NotBlank(message = "이메일은 필수 입력값입니다.")
+            @Email(message = "올바른 이메일 주소를 입력해 주세요.")
+            String email) {
 
         // service 호출
         EmailAvailabilityResponse response = userService.emailAvailability(email);
