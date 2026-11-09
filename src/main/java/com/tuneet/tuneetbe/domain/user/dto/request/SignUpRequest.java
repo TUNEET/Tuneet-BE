@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -34,10 +35,12 @@ public class SignUpRequest {
     private String passwordConfirm;
 
     @Schema(description = "서비스 이용약관 동의 여부", example = "true")
+    @NotNull(message = "필수 약관에 동의해 주세요.")
     @AssertTrue(message = "필수 약관에 동의해 주세요.")
     private Boolean termsAgreed;
 
     @Schema(description = "개인정보 처리방침 동의 여부", example = "true")
+    @NotNull(message = "필수 약관에 동의해 주세요.")
     @AssertTrue(message = "필수 약관에 동의해 주세요.")
     private Boolean privacyAgreed;
 
