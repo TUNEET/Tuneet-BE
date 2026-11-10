@@ -66,4 +66,9 @@ public class Letter {
             this.readAt = readAt;
         }
     }
+
+    // 받는 사람의 편지함에서 삭제 처리
+    public void deleteByReceiver() {
+        this.deletedByReceiver = true;
+    }
 }

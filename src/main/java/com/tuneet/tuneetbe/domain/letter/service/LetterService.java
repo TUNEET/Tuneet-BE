@@ -252,4 +252,41 @@ public class LetterService {
                 .createdAt(letter.getCreatedAt())
                 .build();
     }
+
+    // 편지 단건 삭제
+    @Transactional
+    public void deleteLetter(Long userId, Long letterId) {
+
+        // 편지가 존재하는지 조회
+        Letter letter = letterRepository.findById(letterId)
+                .orElseThrow(() -> new CustomException(LetterErrorCode.LETTER_NOT_FOUND));
+
+        // 내가 받은 편지인지, 이미 삭제하지 않았는지 확인
+        if (!letter.getReceiver().getId().equals(userId) || letter.getDeletedByReceiver()) {
+            log.warn("[LetterService] 삭제할 수 없는 편지입니다.");
+            throw new CustomException(LetterErrorCode.LETTER_NOT_FOUND);
+        }
+
+        // DB 삭제가 아닌 편지함에서 삭제
+        letter.deleteByReceiver();
+
+        // 로그 출력
+        log.info("[LetterService] 편지 삭제 성공: letterId = {}", letterId);
+    }
+
+    // 편지 전체 삭제
+    @Transactional
+    public void deleteAllLetters(Long userId) {
+
+        // 내가 받고 아직 삭제하지 않은 편지 조회
+        List<Letter> letters = letterRepository.findAllByReceiverIdAndDeletedByReceiverFalse(userId);
+
+        // 하나씩 삭제 처리
+        for (Letter letter : letters) {
+            letter.deleteByReceiver();
+        }
+
+        // 로그 출력
+        log.info("[LetterService] 편지 전체 삭제 성공: userId = {}, count = {}", userId, letters.size());
+    }
 }
