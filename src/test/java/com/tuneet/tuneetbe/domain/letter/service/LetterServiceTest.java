@@ -507,4 +507,105 @@ class LetterServiceTest {
             assertThat(response.getHasNext()).isFalse();
         }
     }
+
+    @Nested
+    @DisplayName("편지 삭제")
+    class DeleteLetter {
+
+        @Test
+        @DisplayName("내가 받은 편지면 편지함에서 삭제 처리한다")
+        void success() {
+            // given
+            Letter letter = savedLetter(LETTER_ID, savedUser(SENDER_ID, "튜니"), savedUser(RECEIVER_ID, "원이"));
+            given(letterRepository.findById(LETTER_ID)).willReturn(Optional.of(letter));
+
+            // when
+            letterService.deleteLetter(RECEIVER_ID, LETTER_ID);
+
+            // then
+            assertThat(letter.getDeletedByReceiver()).isTrue();
+            verify(letterRepository, never()).delete(any());
+        }
+
+        @Test
+        @DisplayName("다른 사람이 받은 편지면 LETTER_NOT_FOUND 예외가 발생하고 삭제하지 않는다")
+        void otherUserLetter() {
+            // given
+            Letter letter = savedLetter(LETTER_ID, savedUser(SENDER_ID, "튜니"), savedUser(RECEIVER_ID, "원이"));
+            given(letterRepository.findById(LETTER_ID)).willReturn(Optional.of(letter));
+
+            // when & then
+            assertThatThrownBy(() -> letterService.deleteLetter(SENDER_ID, LETTER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(LetterErrorCode.LETTER_NOT_FOUND);
+
+            assertThat(letter.getDeletedByReceiver()).isFalse();
+        }
+
+        @Test
+        @DisplayName("이미 삭제한 편지면 LETTER_NOT_FOUND 예외가 발생한다")
+        void alreadyDeleted() {
+            // given
+            Letter letter = savedLetter(LETTER_ID, savedUser(SENDER_ID, "튜니"), savedUser(RECEIVER_ID, "원이"));
+            letter.deleteByReceiver();
+            given(letterRepository.findById(LETTER_ID)).willReturn(Optional.of(letter));
+
+            // when & then
+            assertThatThrownBy(() -> letterService.deleteLetter(RECEIVER_ID, LETTER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(LetterErrorCode.LETTER_NOT_FOUND);
+        }
+
+        @Test
+        @DisplayName("편지가 없으면 LETTER_NOT_FOUND 예외가 발생한다")
+        void letterNotFound() {
+            // given
+            given(letterRepository.findById(LETTER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> letterService.deleteLetter(RECEIVER_ID, LETTER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(LetterErrorCode.LETTER_NOT_FOUND);
+        }
+    }
+
+    @Nested
+    @DisplayName("편지 전체 삭제")
+    class DeleteAllLetters {
+
+        @Test
+        @DisplayName("내가 받고 삭제하지 않은 편지를 모두 삭제 처리한다")
+        void success() {
+            // given
+            User receiver = savedUser(RECEIVER_ID, "원이");
+            Letter first = savedLetter(1L, savedUser(SENDER_ID, "튜니"), receiver);
+            Letter second = savedLetter(2L, savedUser(SENDER_ID, "튜니"), receiver);
+            given(letterRepository.findAllByReceiverIdAndDeletedByReceiverFalse(RECEIVER_ID))
+                    .willReturn(List.of(first, second));
+
+            // when
+            letterService.deleteAllLetters(RECEIVER_ID);
+
+            // then
+            assertThat(first.getDeletedByReceiver()).isTrue();
+            assertThat(second.getDeletedByReceiver()).isTrue();
+            verify(letterRepository, never()).deleteAll(any());
+        }
+
+        @Test
+        @DisplayName("삭제할 편지가 없어도 예외 없이 끝난다")
+        void empty() {
+            // given
+            given(letterRepository.findAllByReceiverIdAndDeletedByReceiverFalse(RECEIVER_ID)).willReturn(List.of());
+
+            // when
+            letterService.deleteAllLetters(RECEIVER_ID);
+
+            // then
+            verify(letterRepository).findAllByReceiverIdAndDeletedByReceiverFalse(RECEIVER_ID);
+        }
+    }
 }

@@ -98,4 +98,31 @@ public class LetterController {
         // 응답 반환
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "편지 리스트 조회 성공", response));
     }
+
+    // 편지 단건 삭제
+    @Operation(summary = "편지 단건 삭제", description = "사용자가 받은 편지를 편지함에서 삭제하는 API")
+    @DeleteMapping("/letters/{letter-id}")
+    public ResponseEntity<BaseResponse<Void>> deleteLetter(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("letter-id") Long letterId) {
+
+        // service 호출
+        letterService.deleteLetter(userDetails.getUserId(), letterId);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "편지 삭제 성공", null));
+    }
+
+    // 편지 전체 삭제
+    @Operation(summary = "편지 전체 삭제", description = "사용자가 받은 편지를 편지함에서 모두 삭제하는 API")
+    @DeleteMapping("/letters")
+    public ResponseEntity<BaseResponse<Void>> deleteAllLetters(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+
+        // service 호출
+        letterService.deleteAllLetters(userDetails.getUserId());
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "편지 전체 삭제 성공", null));
+    }
 }

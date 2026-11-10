@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public interface LetterRepository extends JpaRepository<Letter, Long> {
 
@@ -20,4 +21,8 @@ public interface LetterRepository extends JpaRepository<Letter, Long> {
     // 내가 받은 편지 중 커서보다 이전 편지를 보낸 사람과 노래를 함께 조회
     @EntityGraph(attributePaths = {"sender", "music"})
     Slice<Letter> findByReceiverIdAndDeletedByReceiverFalseAndIdLessThanOrderByIdDesc(Long receiverId, Long cursor, Pageable pageable);
+
+    // 내가 받고 아직 삭제하지 않은 편지 전체 조회
+    // TODO: 추후 편지가 많아지면 Query 방식으로 변경하는 것이 좋을것 같음
+    List<Letter> findAllByReceiverIdAndDeletedByReceiverFalse(Long receiverId);
 }
