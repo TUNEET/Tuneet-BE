@@ -1,5 +1,7 @@
 package com.tuneet.tuneetbe.domain.letter.service;
 
+import com.tuneet.tuneetbe.domain.letter.dto.response.LetterDetailResponse;
+import com.tuneet.tuneetbe.domain.letter.dto.response.LetterListResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterSendResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.RandomLetterSendResponse;
 import com.tuneet.tuneetbe.domain.letter.entity.Letter;
@@ -14,11 +16,14 @@ import com.tuneet.tuneetbe.global.exception.CustomException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -29,6 +34,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class LetterService {
 
     private static final int DAILY_LETTER_LIMIT = 5; // 하루에 편지 보낼 수 있는 횟수
+    private static final String DELETED_USER_NICKNAME = "탈퇴한 사용자"; // 탈퇴한 사용자 표시 닉네임
 
     private final LetterRepository letterRepository;
     private final UserRepository userRepository;
@@ -161,6 +167,88 @@ public class LetterService {
                         .musicPicture(music.getMusicPicture())
                         .build())
                 .letterContent(letter.getLetterContent())
+                .createdAt(letter.getCreatedAt())
+                .build();
+    }
+
+    // 편지 상세보기
+    // 읽은 시간을 저장해야 되기 때문에 @Transactional 사용
+    @Transactional
+    public LetterDetailResponse letterDetail(Long userId, Long letterId) {
+
+        // 편지가 존재하는지 조회
+        Letter letter = letterRepository.findById(letterId)
+                .orElseThrow(() -> new CustomException(LetterErrorCode.LETTER_NOT_FOUND));
+
+        // 내가 받은 편지인지, 삭제하지 않았는지 확인
+        if (!letter.getReceiver().getId().equals(userId) || letter.getDeletedByReceiver()) {
+            log.warn("[LetterService] 조회할 수 없는 편지입니다.");
+            throw new CustomException(LetterErrorCode.LETTER_NOT_FOUND);
+        }
+
+        // 처음 열었을 때 읽음 처리
+        letter.markAsRead(LocalDateTime.now());
+
+        // 응답 반환
+        return toLetterDetailResponse(letter);
+    }
+
+    // 편지 리스트 보기
+    public LetterListResponse letterList(Long userId, Long cursor, int size) {
+
+        Pageable pageable = PageRequest.of(0, size);
+        Slice<Letter> letters;
+
+        // 커서가 없으면 내가 받은 최신 편지부터 조회
+        if (cursor == null) {
+            letters = letterRepository.findByReceiverIdAndDeletedByReceiverFalseOrderByIdDesc(userId, pageable);
+        }
+
+        // 커서가 있으면 커서보다 이전 편지 조회
+        else {
+            letters = letterRepository.findByReceiverIdAndDeletedByReceiverFalseAndIdLessThanOrderByIdDesc(userId, cursor, pageable);
+        }
+
+        // 응답 목록 세팅
+        List<LetterDetailResponse> letterResponses = new ArrayList<>();
+        for (Letter letter : letters.getContent()) {
+            letterResponses.add(toLetterDetailResponse(letter));
+        }
+
+        // 응답 반환
+        return LetterListResponse.builder()
+                .letters(letterResponses)
+                .hasNext(letters.hasNext())
+                .build();
+    }
+
+    // Letter 엔티티를 응답 dto로 변환
+    private LetterDetailResponse toLetterDetailResponse(Letter letter) {
+
+        User sender = letter.getSender(); // 보낸 사람
+        Music music = letter.getMusic(); // 편지에 담긴 노래
+
+        // 탈퇴한 사용자가 보낸 편지는 "탈퇴한 사용자"로 표시
+        String senderNickname;
+        if (sender.isDeleted()) {
+            senderNickname = DELETED_USER_NICKNAME;
+        }
+        else {
+            senderNickname = sender.getNickname();
+        }
+
+        return LetterDetailResponse.builder()
+                .letterId(letter.getId())
+                .senderId(sender.getId())
+                .senderNickname(senderNickname)
+                .music(MusicResponse.builder()
+                        .musicId(music.getId())
+                        .title(music.getTitle())
+                        .artist(music.getArtist())
+                        .musicPicture(music.getMusicPicture())
+                        .build())
+                .letterContent(letter.getLetterContent())
+                .isRead(letter.getReadAt() != null)
                 .createdAt(letter.getCreatedAt())
                 .build();
     }

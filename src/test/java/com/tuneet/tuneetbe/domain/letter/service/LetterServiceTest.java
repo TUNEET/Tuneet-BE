@@ -1,5 +1,7 @@
 package com.tuneet.tuneetbe.domain.letter.service;
 
+import com.tuneet.tuneetbe.domain.letter.dto.response.LetterDetailResponse;
+import com.tuneet.tuneetbe.domain.letter.dto.response.LetterListResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterSendResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.RandomLetterSendResponse;
 import com.tuneet.tuneetbe.domain.letter.entity.Letter;
@@ -21,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
@@ -327,6 +330,181 @@ class LetterServiceTest {
                     .isInstanceOf(CustomException.class)
                     .extracting("errorCode")
                     .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        }
+    }
+
+    private Letter savedLetter(Long id, User sender, User receiver) {
+        Letter letter = Letter.builder()
+                .sender(sender)
+                .receiver(receiver)
+                .music(savedMusic())
+                .letterContent(CONTENT)
+                .isRandom(false)
+                .build();
+        ReflectionTestUtils.setField(letter, "id", id);
+        return letter;
+    }
+
+    @Nested
+    @DisplayName("편지 상세보기")
+    class LetterDetail {
+
+        @Test
+        @DisplayName("내가 받은 편지면 보낸 사람 정보를 반환하고 읽음 처리한다")
+        void success() {
+            // given
+            Letter letter = savedLetter(LETTER_ID, savedUser(SENDER_ID, "튜니"), savedUser(RECEIVER_ID, "원이"));
+            given(letterRepository.findById(LETTER_ID)).willReturn(Optional.of(letter));
+
+            // when
+            LetterDetailResponse response = letterService.letterDetail(RECEIVER_ID, LETTER_ID);
+
+            // then
+            assertThat(letter.getReadAt()).isNotNull();
+            assertThat(response.getLetterId()).isEqualTo(LETTER_ID);
+            assertThat(response.getSenderId()).isEqualTo(SENDER_ID);
+            assertThat(response.getSenderNickname()).isEqualTo("튜니");
+            assertThat(response.getMusic().getTitle()).isEqualTo("Pretty Girl");
+            assertThat(response.getLetterContent()).isEqualTo(CONTENT);
+            assertThat(response.getIsRead()).isTrue();
+        }
+
+        @Test
+        @DisplayName("이미 읽은 편지는 처음 읽은 시간을 유지한다")
+        void keepFirstReadAt() {
+            // given
+            Letter letter = savedLetter(LETTER_ID, savedUser(SENDER_ID, "튜니"), savedUser(RECEIVER_ID, "원이"));
+            LocalDateTime firstReadAt = LocalDateTime.of(2026, 11, 1, 9, 0);
+            ReflectionTestUtils.setField(letter, "readAt", firstReadAt);
+            given(letterRepository.findById(LETTER_ID)).willReturn(Optional.of(letter));
+
+            // when
+            letterService.letterDetail(RECEIVER_ID, LETTER_ID);
+
+            // then
+            assertThat(letter.getReadAt()).isEqualTo(firstReadAt);
+        }
+
+        @Test
+        @DisplayName("탈퇴한 사용자가 보낸 편지는 보낸 사람을 탈퇴한 사용자로 표시한다")
+        void deletedSender() {
+            // given
+            User sender = savedUser(SENDER_ID, "튜니");
+            sender.deleteUser(LocalDateTime.now());
+            given(letterRepository.findById(LETTER_ID))
+                    .willReturn(Optional.of(savedLetter(LETTER_ID, sender, savedUser(RECEIVER_ID, "원이"))));
+
+            // when
+            LetterDetailResponse response = letterService.letterDetail(RECEIVER_ID, LETTER_ID);
+
+            // then
+            assertThat(response.getSenderNickname()).isEqualTo("탈퇴한 사용자");
+        }
+
+        @Test
+        @DisplayName("다른 사람이 받은 편지면 LETTER_NOT_FOUND 예외가 발생하고 읽음 처리하지 않는다")
+        void otherUserLetter() {
+            // given
+            Letter letter = savedLetter(LETTER_ID, savedUser(SENDER_ID, "튜니"), savedUser(RECEIVER_ID, "원이"));
+            given(letterRepository.findById(LETTER_ID)).willReturn(Optional.of(letter));
+
+            // when & then
+            assertThatThrownBy(() -> letterService.letterDetail(3L, LETTER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(LetterErrorCode.LETTER_NOT_FOUND);
+
+            assertThat(letter.getReadAt()).isNull();
+        }
+
+        @Test
+        @DisplayName("내가 삭제한 편지면 LETTER_NOT_FOUND 예외가 발생한다")
+        void deletedByReceiver() {
+            // given
+            Letter letter = savedLetter(LETTER_ID, savedUser(SENDER_ID, "튜니"), savedUser(RECEIVER_ID, "원이"));
+            ReflectionTestUtils.setField(letter, "deletedByReceiver", true);
+            given(letterRepository.findById(LETTER_ID)).willReturn(Optional.of(letter));
+
+            // when & then
+            assertThatThrownBy(() -> letterService.letterDetail(RECEIVER_ID, LETTER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(LetterErrorCode.LETTER_NOT_FOUND);
+        }
+
+        @Test
+        @DisplayName("편지가 없으면 LETTER_NOT_FOUND 예외가 발생한다")
+        void letterNotFound() {
+            // given
+            given(letterRepository.findById(LETTER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> letterService.letterDetail(RECEIVER_ID, LETTER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(LetterErrorCode.LETTER_NOT_FOUND);
+        }
+    }
+
+    @Nested
+    @DisplayName("편지 리스트 보기")
+    class LetterList {
+
+        private static final int SIZE = 2;
+        private final PageRequest pageable = PageRequest.of(0, SIZE);
+
+        @Test
+        @DisplayName("커서가 없으면 내가 받은 최신 편지부터 조회하고 읽음 여부와 다음 편지 여부를 반환한다")
+        void firstPage() {
+            // given
+            User receiver = savedUser(RECEIVER_ID, "원이");
+            Letter unread = savedLetter(3L, savedUser(SENDER_ID, "튜니"), receiver);
+            Letter read = savedLetter(2L, savedUser(SENDER_ID, "튜니"), receiver);
+            ReflectionTestUtils.setField(read, "readAt", LocalDateTime.now());
+            given(letterRepository.findByReceiverIdAndDeletedByReceiverFalseOrderByIdDesc(RECEIVER_ID, pageable))
+                    .willReturn(new SliceImpl<>(List.of(unread, read), pageable, true));
+
+            // when
+            LetterListResponse response = letterService.letterList(RECEIVER_ID, null, SIZE);
+
+            // then
+            assertThat(response.getLetters()).extracting("letterId").containsExactly(3L, 2L);
+            assertThat(response.getLetters()).extracting("isRead").containsExactly(false, true);
+            assertThat(response.getHasNext()).isTrue();
+            verify(letterRepository, never())
+                    .findByReceiverIdAndDeletedByReceiverFalseAndIdLessThanOrderByIdDesc(anyLong(), anyLong(), any());
+        }
+
+        @Test
+        @DisplayName("커서가 있으면 커서보다 이전 편지를 조회한다")
+        void nextPage() {
+            // given
+            Letter letter = savedLetter(1L, savedUser(SENDER_ID, "튜니"), savedUser(RECEIVER_ID, "원이"));
+            given(letterRepository.findByReceiverIdAndDeletedByReceiverFalseAndIdLessThanOrderByIdDesc(RECEIVER_ID, 2L, pageable))
+                    .willReturn(new SliceImpl<>(List.of(letter), pageable, false));
+
+            // when
+            LetterListResponse response = letterService.letterList(RECEIVER_ID, 2L, SIZE);
+
+            // then
+            assertThat(response.getLetters()).extracting("letterId").containsExactly(1L);
+            assertThat(response.getHasNext()).isFalse();
+            verify(letterRepository, never()).findByReceiverIdAndDeletedByReceiverFalseOrderByIdDesc(anyLong(), any());
+        }
+
+        @Test
+        @DisplayName("받은 편지가 없으면 빈 목록과 hasNext false를 반환한다")
+        void empty() {
+            // given
+            given(letterRepository.findByReceiverIdAndDeletedByReceiverFalseOrderByIdDesc(RECEIVER_ID, pageable))
+                    .willReturn(new SliceImpl<>(List.of(), pageable, false));
+
+            // when
+            LetterListResponse response = letterService.letterList(RECEIVER_ID, null, SIZE);
+
+            // then
+            assertThat(response.getLetters()).isEmpty();
+            assertThat(response.getHasNext()).isFalse();
         }
     }
 }

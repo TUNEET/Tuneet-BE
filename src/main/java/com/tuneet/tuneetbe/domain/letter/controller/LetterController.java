@@ -2,6 +2,8 @@ package com.tuneet.tuneetbe.domain.letter.controller;
 
 import com.tuneet.tuneetbe.domain.letter.dto.request.LetterSendRequest;
 import com.tuneet.tuneetbe.domain.letter.dto.request.RandomLetterSendRequest;
+import com.tuneet.tuneetbe.domain.letter.dto.response.LetterDetailResponse;
+import com.tuneet.tuneetbe.domain.letter.dto.response.LetterListResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterSendResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.RandomLetterSendResponse;
 import com.tuneet.tuneetbe.domain.letter.service.LetterService;
@@ -12,14 +14,13 @@ import com.tuneet.tuneetbe.global.security.CustomUserDetails;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -64,5 +65,37 @@ public class LetterController {
 
         // 응답 반환
         return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(201, "랜덤 편지 발송 성공", response));
+    }
+
+    // 편지 상세보기
+    @Operation(summary = "편지 상세보기", description = "다른 사용자에게 편지를 받았을 때 편지 하나를 상세조회하는 API")
+    @GetMapping("/letters/{letter-id}")
+    public ResponseEntity<BaseResponse<LetterDetailResponse>> getLetter(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("letter-id") Long letterId) {
+
+        // service 호출
+        LetterDetailResponse response = letterService.letterDetail(userDetails.getUserId(), letterId);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "편지 상세보기 성공", response));
+    }
+
+    // 편지 리스트 보기
+    @Operation(summary = "편지 리스트 보기", description = "사용자가 받은 편지 목록을 최신순으로 조회하는 API")
+    @GetMapping("/letters")
+    public ResponseEntity<BaseResponse<LetterListResponse>> getLetters(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(required = false) Long cursor,
+            @RequestParam(defaultValue = "20")
+            @Min(value = 1, message = "size는 1 이상이어야 합니다.")
+            @Max(value = 50, message = "size는 50 이하여야 합니다.")
+            int size) {
+
+        // service 호출
+        LetterListResponse response = letterService.letterList(userDetails.getUserId(), cursor, size);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "편지 리스트 조회 성공", response));
     }
 }

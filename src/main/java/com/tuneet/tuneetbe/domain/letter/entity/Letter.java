@@ -59,4 +59,11 @@ public class Letter {
         this.letterContent = letterContent;
         this.isRandom = isRandom;
     }
+
+    // 처음 읽을 때만 읽은 시간 저장
+    public void markAsRead(LocalDateTime readAt) {
+        if (this.readAt == null) {
+            this.readAt = readAt;
+        }
+    }
 }
