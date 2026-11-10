@@ -4,6 +4,7 @@ import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
@@ -49,4 +50,13 @@ public class Letter {
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt; // 보낸 일시
+
+    @Builder
+    private Letter(User sender, User receiver, Music music, String letterContent, Boolean isRandom) {
+        this.sender = sender;
+        this.receiver = receiver;
+        this.music = music;
+        this.letterContent = letterContent;
+        this.isRandom = isRandom;
+    }
 }

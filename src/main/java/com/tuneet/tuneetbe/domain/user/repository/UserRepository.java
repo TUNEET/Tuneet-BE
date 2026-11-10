@@ -2,11 +2,13 @@ package com.tuneet.tuneetbe.domain.user.repository;
 
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -24,4 +26,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.id = :userId")
     Optional<User> findByIdForUpdate(@Param("userId") Long userId);
+
+    // 랜덤 편지를 받을 수 있는 사용자 수 (나 제외, 탈퇴하지 않음, 편지 받기 켬)
+    long countByIdNotAndDeletedAtIsNullAndLetterReceivableTrue(Long userId);
+
+    // 랜덤 편지를 받을 수 있는 사용자 조회 (나 제외, 탈퇴하지 않음, 편지 받기 켬)
+    List<User> findByIdNotAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(Long userId, Pageable pageable);
 }
