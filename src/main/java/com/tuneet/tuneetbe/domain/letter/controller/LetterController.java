@@ -4,6 +4,7 @@ import com.tuneet.tuneetbe.domain.letter.dto.request.LetterSendRequest;
 import com.tuneet.tuneetbe.domain.letter.dto.request.RandomLetterSendRequest;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterDetailResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterListResponse;
+import com.tuneet.tuneetbe.domain.letter.dto.response.LetterRemainingResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterSendResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.RandomLetterSendResponse;
 import com.tuneet.tuneetbe.domain.letter.service.LetterService;
@@ -124,5 +125,18 @@ public class LetterController {
 
         // 응답 반환
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "편지 전체 삭제 성공", null));
+    }
+
+    // 오늘 남은 편지지 조회
+    @Operation(summary = "오늘 남은 편지지 조회", description = "사용자가 오늘 보낼 수 있는 남은 편지 수를 조회하는 API")
+    @GetMapping("/letters/remaining")
+    public ResponseEntity<BaseResponse<LetterRemainingResponse>> getRemainingLetters(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+
+        // service 호출
+        LetterRemainingResponse response = letterService.letterRemaining(userDetails.getUserId());
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "오늘 남은 편지지 조회 성공", response));
     }
 }

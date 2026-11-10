@@ -2,6 +2,7 @@ package com.tuneet.tuneetbe.domain.letter.service;
 
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterDetailResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterListResponse;
+import com.tuneet.tuneetbe.domain.letter.dto.response.LetterRemainingResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterSendResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.RandomLetterSendResponse;
 import com.tuneet.tuneetbe.domain.letter.entity.Letter;
@@ -606,6 +607,64 @@ class LetterServiceTest {
 
             // then
             verify(letterRepository).findAllByReceiverIdAndDeletedByReceiverFalse(RECEIVER_ID);
+        }
+    }
+
+    @Nested
+    @DisplayName("오늘 남은 편지지 조회")
+    class LetterRemaining {
+
+        @Test
+        @DisplayName("오늘 보낸 편지 수를 빼고 남은 수와 하루 최대 수를 반환한다")
+        void remaining() {
+            // given
+            givenSentToday(2);
+
+            // when
+            LetterRemainingResponse response = letterService.letterRemaining(SENDER_ID);
+
+            // then
+            assertThat(response.getRemaining()).isEqualTo(3);
+            assertThat(response.getLimit()).isEqualTo(5);
+        }
+
+        @Test
+        @DisplayName("오늘 보낸 편지가 없으면 5장이 남는다")
+        void noneSent() {
+            // given
+            givenSentToday(0);
+
+            // when
+            LetterRemainingResponse response = letterService.letterRemaining(SENDER_ID);
+
+            // then
+            assertThat(response.getRemaining()).isEqualTo(5);
+        }
+
+        @Test
+        @DisplayName("5장을 모두 보냈으면 0장이 남는다")
+        void allSent() {
+            // given
+            givenSentToday(5);
+
+            // when
+            LetterRemainingResponse response = letterService.letterRemaining(SENDER_ID);
+
+            // then
+            assertThat(response.getRemaining()).isZero();
+        }
+
+        @Test
+        @DisplayName("보낸 편지가 하루 최대 수보다 많아도 남은 수는 0 미만이 되지 않는다")
+        void neverNegative() {
+            // given
+            givenSentToday(7);
+
+            // when
+            LetterRemainingResponse response = letterService.letterRemaining(SENDER_ID);
+
+            // then
+            assertThat(response.getRemaining()).isZero();
         }
     }
 }
