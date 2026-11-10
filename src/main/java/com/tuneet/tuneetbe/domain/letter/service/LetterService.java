@@ -2,6 +2,7 @@ package com.tuneet.tuneetbe.domain.letter.service;
 
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterDetailResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterListResponse;
+import com.tuneet.tuneetbe.domain.letter.dto.response.LetterRemainingResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterSendResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.RandomLetterSendResponse;
 import com.tuneet.tuneetbe.domain.letter.entity.Letter;
@@ -71,8 +72,7 @@ public class LetterService {
         }
 
         // 하루 편지 제한 확인
-        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
-        long sentCount = letterRepository.countBySenderIdAndCreatedAtGreaterThanEqual(userId, todayStart);
+        long sentCount = countTodaySentLetters(userId);
         if (sentCount >= DAILY_LETTER_LIMIT) {
             log.warn("[LetterService] 오늘 보낼 수 있는 편지를 모두 사용했습니다.");
             throw new CustomException(LetterErrorCode.LETTER_DAILY_LIMIT_EXCEEDED);
@@ -116,8 +116,7 @@ public class LetterService {
                 .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
         // 하루 편지 제한 확인 (받는 사람을 고르기 전에 먼저 확인)
-        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
-        long sentCount = letterRepository.countBySenderIdAndCreatedAtGreaterThanEqual(userId, todayStart);
+        long sentCount = countTodaySentLetters(userId);
         if (sentCount >= DAILY_LETTER_LIMIT) {
             log.warn("[LetterService] 오늘 보낼 수 있는 편지를 모두 사용했습니다.");
             throw new CustomException(LetterErrorCode.LETTER_DAILY_LIMIT_EXCEEDED);
@@ -288,5 +287,27 @@ public class LetterService {
 
         // 로그 출력
         log.info("[LetterService] 편지 전체 삭제 성공: userId = {}, count = {}", userId, letters.size());
+    }
+
+    // 남은 편지 조회
+    public LetterRemainingResponse letterRemaining(Long userId) {
+
+        // 오늘 보낸 편지 수
+        long sentCount = countTodaySentLetters(userId);
+
+        // 남은 수량 (5장을 넘었어도 0 미만으로 내려가지 않게)
+        int remaining = (int) Math.max(0, DAILY_LETTER_LIMIT - sentCount);
+
+        // 응답 반환
+        return LetterRemainingResponse.builder()
+                .remaining(remaining)
+                .limit(DAILY_LETTER_LIMIT)
+                .build();
+    }
+
+    // 오늘 자정 이후 보낸 편지 수
+    private long countTodaySentLetters(Long userId) {
+        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+        return letterRepository.countBySenderIdAndCreatedAtGreaterThanEqual(userId, todayStart);
     }
 }
