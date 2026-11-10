@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Service
@@ -128,7 +129,14 @@ public class LetterService {
         int randomIndex = ThreadLocalRandom.current().nextInt((int) candidateCount);
 
         // 랜덤 위치의 사용자 한 명 조회 (한 명씩 나눈 페이지 중 randomIndex 번째 페이지)
-        User receiver = userRepository.findByIdNotAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(userId, PageRequest.of(randomIndex, 1)).get(0);
+        List<User> candidates = userRepository.findByIdNotAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(userId, PageRequest.of(randomIndex, 1));
+
+        // 그 사이 후보가 편지 수신 거부를 하거나 탈퇴하면 조회 결과가 없을 수도 있기 때문에 받을 사람이 없는 것으로 처리
+        if (candidates.isEmpty()) {
+            log.warn("[LetterService] 랜덤 편지를 받을 수 있는 사용자가 없습니다.");
+            throw new CustomException(LetterErrorCode.LETTER_NO_RANDOM_RECEIVER);
+        }
+        User receiver = candidates.get(0);
 
         // DB 저장
         Letter letter = letterRepository.save(Letter.builder()

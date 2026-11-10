@@ -281,6 +281,25 @@ class LetterServiceTest {
         }
 
         @Test
+        @DisplayName("후보 수를 센 뒤 후보가 줄어 조회 결과가 비면 LETTER_NO_RANDOM_RECEIVER 예외가 발생하고 저장하지 않는다")
+        void candidateRemovedAfterCount() {
+            // given
+            given(userRepository.findByIdForUpdate(SENDER_ID)).willReturn(Optional.of(savedUser(SENDER_ID, "튜니")));
+            givenSentToday(0);
+            given(userRepository.countByIdNotAndDeletedAtIsNullAndLetterReceivableTrue(SENDER_ID)).willReturn(1L);
+            given(userRepository.findByIdNotAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(SENDER_ID, PageRequest.of(0, 1)))
+                    .willReturn(List.of());
+
+            // when & then
+            assertThatThrownBy(() -> letterService.sendRandomLetter(SENDER_ID, savedMusic(), CONTENT))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(LetterErrorCode.LETTER_NO_RANDOM_RECEIVER);
+
+            verify(letterRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("오늘 5장을 이미 보냈으면 받는 사람을 고르지 않고 LETTER_DAILY_LIMIT_EXCEEDED 예외가 발생한다")
         void dailyLimitExceeded() {
             // given
