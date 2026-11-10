@@ -1,15 +1,16 @@
 package com.tuneet.tuneetbe.domain.feed.service;
 
-import com.tuneet.tuneetbe.domain.feed.dto.response.FeedCreateResponse;
-import com.tuneet.tuneetbe.domain.feed.dto.response.FeedDetailResponse;
-import com.tuneet.tuneetbe.domain.feed.dto.response.FeedListResponse;
-import com.tuneet.tuneetbe.domain.feed.dto.response.FeedUpdateResponse;
+import com.tuneet.tuneetbe.domain.feed.dto.response.*;
 import com.tuneet.tuneetbe.domain.feed.entity.Feed;
+import com.tuneet.tuneetbe.domain.feed.entity.FeedMessage;
 import com.tuneet.tuneetbe.domain.feed.exception.FeedErrorCode;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.dto.response.MusicResponse;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
+import com.tuneet.tuneetbe.domain.notification.entity.Notification;
+import com.tuneet.tuneetbe.domain.notification.enums.NotificationType;
+import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
@@ -34,6 +35,7 @@ public class FeedService {
     private final FeedRepository feedRepository;
     private final UserRepository userRepository;
     private final FeedMessageRepository feedMessageRepository;
+    private final NotificationRepository notificationRepository;
 
     // 피드 작성
     @Transactional
@@ -198,5 +200,59 @@ public class FeedService {
 
         // 로그 출력
         log.info("[FeedService] 피드 삭제 성공: feedId = {}", feedId);
+    }
+
+    // 피드 메시지 작성
+    @Transactional
+    public FeedSendMessageResponse sendMessage(Long userId, Long feedId, String messageContent, Music music) {
+
+        // 로그인한 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 피드가 존재하는지 조회
+        Feed feed = feedRepository.findById(feedId)
+                .orElseThrow(() -> new CustomException(FeedErrorCode.FEED_NOT_FOUND));
+
+        // 본인의 피드인지 확인
+        if (userId.equals(feed.getUser().getId())) {
+            log.warn("[FeedService] 본인 피드에는 메시지를 보낼 수 없습니다.");
+            throw new CustomException(FeedErrorCode.FEED_MESSAGE_SELF);
+        }
+
+        // DB 저장
+        FeedMessage feedMessage = feedMessageRepository.save(FeedMessage.builder()
+                .user(user)
+                .feed(feed)
+                .music(music)
+                .messageContent(messageContent)
+                .build());
+
+        // 알림 저장
+        notificationRepository.save(Notification.builder()
+                .receiver(feed.getUser())
+                .sender(user)
+                .type(NotificationType.FEED_MESSAGE)
+                .targetId(feedMessage.getId())
+                .build());
+
+        // 로그 출력
+        log.info("[FeedService] 피드 메시지 작성 성공: feedMessageId = {}", feedMessage.getId());
+
+        // 응답 세팅
+        return FeedSendMessageResponse.builder()
+                .feedMessageId(feedMessage.getId())
+                .feedId(feed.getId())
+                .nickname(user.getNickname())
+                .profilePicture(user.getProfilePicture())
+                .music(MusicResponse.builder()
+                        .musicId(music.getId())
+                        .title(music.getTitle())
+                        .artist(music.getArtist())
+                        .musicPicture(music.getMusicPicture())
+                        .build())
+                .messageContent(messageContent)
+                .createdAt(feedMessage.getCreatedAt())
+                .build();
     }
 }

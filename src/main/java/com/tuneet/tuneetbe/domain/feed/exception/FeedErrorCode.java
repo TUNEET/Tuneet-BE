@@ -10,7 +10,8 @@ import org.springframework.http.HttpStatus;
 public enum FeedErrorCode implements BaseErrorCode {
 
     FEED_NOT_FOUND("F4001", "피드를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
-    FEED_ACCESS_DENIED("F4002", "피드 접근 권한이 없습니다.", HttpStatus.FORBIDDEN);
+    FEED_ACCESS_DENIED("F4002", "피드 접근 권한이 없습니다.", HttpStatus.FORBIDDEN),
+    FEED_MESSAGE_SELF("F4003", "본인 피드에는 메시지를 보낼 수 없습니다.", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String message;
