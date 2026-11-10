@@ -1,9 +1,11 @@
 package com.tuneet.tuneetbe.domain.feed.controller;
 
 import com.tuneet.tuneetbe.domain.feed.dto.request.FeedCreateRequest;
+import com.tuneet.tuneetbe.domain.feed.dto.request.FeedUpdateRequest;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedCreateResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedDetailResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedListResponse;
+import com.tuneet.tuneetbe.domain.feed.dto.response.FeedUpdateResponse;
 import com.tuneet.tuneetbe.domain.feed.service.FeedService;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.music.service.MusicCatalogService;
@@ -77,5 +79,40 @@ public class FeedController {
 
         // 응답 반환
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "피드 리스트 조회 성공", response));
+    }
+
+    // 피드 수정
+    @Operation(summary = "피드 수정", description = "사용자가 피드를 수정하는 API")
+    @PutMapping("/feeds/{feed-id}")
+    public ResponseEntity<BaseResponse<FeedUpdateResponse>> feedUpdate(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("feed-id") Long feedId,
+            @Valid @RequestBody FeedUpdateRequest request) {
+
+        // 노래를 바꿀 때만 트랜잭션 밖에서 곡 확보
+        Music music = null;
+        if (request.getMusicId() != null) {
+            music = musicCatalogService.getOrCreateMusics(List.of(request.getMusicId())).get(0);
+        }
+
+        // service 호출
+        FeedUpdateResponse response = feedService.updateFeed(userDetails.getUserId(), music, request.getContent(), feedId);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "피드 수정 성공", response));
+    }
+
+    // 피드 삭제
+    @Operation(summary = "피드 삭제", description = "사용자가 본인이 작성한 피드를 삭제하는 API")
+    @DeleteMapping("/feeds/{feed-id}")
+    public ResponseEntity<BaseResponse<Void>> deleteFeed(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("feed-id") Long feedId) {
+
+        // service 호출
+        feedService.deleteFeed(userDetails.getUserId(), feedId);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "피드 삭제 성공", null));
     }
 }

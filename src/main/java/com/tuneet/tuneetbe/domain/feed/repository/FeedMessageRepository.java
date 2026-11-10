@@ -7,4 +7,7 @@ public interface FeedMessageRepository extends JpaRepository<FeedMessage, Long> 
 
     // 사용자가 작성한 피드에 달린 메시지 전체 삭제
     void deleteAllByFeedUserId(Long userId);
+
+    // 피드에 달린 메시지 전체 삭제
+    void deleteAllByFeedId(Long feedId);
 }

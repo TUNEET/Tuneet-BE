@@ -3,8 +3,10 @@ package com.tuneet.tuneetbe.domain.feed.service;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedCreateResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedDetailResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedListResponse;
+import com.tuneet.tuneetbe.domain.feed.dto.response.FeedUpdateResponse;
 import com.tuneet.tuneetbe.domain.feed.entity.Feed;
 import com.tuneet.tuneetbe.domain.feed.exception.FeedErrorCode;
+import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.dto.response.MusicResponse;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
@@ -31,6 +33,7 @@ public class FeedService {
 
     private final FeedRepository feedRepository;
     private final UserRepository userRepository;
+    private final FeedMessageRepository feedMessageRepository;
 
     // 피드 작성
     @Transactional
@@ -124,5 +127,76 @@ public class FeedService {
                 .feeds(feedResponses)
                 .hasNext(feeds.hasNext())
                 .build();
+    }
+
+    // 피드 수정
+    @Transactional
+    public FeedUpdateResponse updateFeed(Long userId, Music music, String content, Long feedId) {
+
+        // 로그인한 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 피드가 존재하는지 조회
+        Feed feed = feedRepository.findById(feedId)
+                .orElseThrow(() -> new CustomException(FeedErrorCode.FEED_NOT_FOUND));
+
+        // 로그인한 사용자와 피드 작성자가 일치하는지 조회
+        if (!userId.equals(feed.getUser().getId())) {
+            log.warn("[FeedService] 피드 수정은 피드 작성자만 수정할 수 있습니다.");
+            throw new CustomException(FeedErrorCode.FEED_ACCESS_DENIED);
+        }
+
+        // 피드 수정
+        feed.updateFeed(music, content);
+        Music updatedMusic = feed.getMusic();
+
+        // DB 저장
+        feedRepository.save(feed);
+
+        // 로그 출력
+        log.info("[FeedService] 피드 수정 성공: feedId = {}", feed.getId());
+
+        // 응답 세팅
+        return FeedUpdateResponse.builder()
+                .feedId(feed.getId())
+                .nickname(user.getNickname())
+                .music(MusicResponse.builder()
+                        .musicId(updatedMusic.getId())
+                        .title(updatedMusic.getTitle())
+                        .artist(updatedMusic.getArtist())
+                        .musicPicture(updatedMusic.getMusicPicture())
+                        .build())
+                .content(feed.getContent())
+                .createdAt(feed.getCreatedAt())
+                .build();
+    }
+
+    // 피드 삭제
+    @Transactional
+    public void deleteFeed(Long userId, Long feedId) {
+
+        // 로그인한 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 피드가 존재하는지 조회
+        Feed feed = feedRepository.findById(feedId)
+                .orElseThrow(() -> new CustomException(FeedErrorCode.FEED_NOT_FOUND));
+
+        // 로그인한 사용자와 작성자가 일치하는지 조회
+        if (!userId.equals(feed.getUser().getId())) {
+            log.warn("[FeedService] 피드 접근 권한이 없습니다.");
+            throw new CustomException(FeedErrorCode.FEED_ACCESS_DENIED);
+        }
+
+        // 피드 메시지 먼저 삭제
+        feedMessageRepository.deleteAllByFeedId(feedId);
+
+        // 피드 삭제
+        feedRepository.deleteById(feedId);
+
+        // 로그 출력
+        log.info("[FeedService] 피드 삭제 성공: feedId = {}", feedId);
     }
 }
