@@ -4,6 +4,7 @@ import com.tuneet.tuneetbe.domain.notification.enums.NotificationType;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
@@ -44,4 +45,12 @@ public class Notification {
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt; // 알림 일시
+
+    @Builder
+    private Notification(User receiver, User sender, NotificationType type, Long targetId) {
+        this.receiver = receiver;
+        this.sender = sender;
+        this.type = type;
+        this.targetId = targetId;
+    }
 }

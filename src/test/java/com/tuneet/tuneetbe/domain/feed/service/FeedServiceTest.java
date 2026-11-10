@@ -3,12 +3,17 @@ package com.tuneet.tuneetbe.domain.feed.service;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedCreateResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedDetailResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedListResponse;
+import com.tuneet.tuneetbe.domain.feed.dto.response.FeedSendMessageResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedUpdateResponse;
 import com.tuneet.tuneetbe.domain.feed.entity.Feed;
+import com.tuneet.tuneetbe.domain.feed.entity.FeedMessage;
 import com.tuneet.tuneetbe.domain.feed.exception.FeedErrorCode;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
+import com.tuneet.tuneetbe.domain.notification.entity.Notification;
+import com.tuneet.tuneetbe.domain.notification.enums.NotificationType;
+import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
@@ -56,6 +61,9 @@ class FeedServiceTest {
 
     @Mock
     private FeedMessageRepository feedMessageRepository;
+
+    @Mock
+    private NotificationRepository notificationRepository;
 
     @InjectMocks
     private FeedService feedService;
@@ -406,6 +414,93 @@ class FeedServiceTest {
                     .isEqualTo(FeedErrorCode.FEED_NOT_FOUND);
 
             verify(feedRepository, never()).deleteById(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("피드 메시지 작성")
+    class SendMessage {
+
+        private static final Long MESSAGE_ID = 500L;
+        private static final String MESSAGE = "이 노래도 좋아하실 것 같아요!";
+
+        @Test
+        @DisplayName("메시지를 저장하고 피드 작성자에게 알림을 저장한다")
+        void success() {
+            // given
+            User me = writer(USER_ID, "튜니", "me.png");
+            User feedWriter = writer(OTHER_USER_ID, "산책하는 튜니", null);
+            Feed feed = savedFeed(FEED_ID, feedWriter);
+            Music music = newMusic();
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(me));
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.of(feed));
+            given(feedMessageRepository.save(any(FeedMessage.class))).willAnswer(invocation -> {
+                FeedMessage feedMessage = invocation.getArgument(0);
+                ReflectionTestUtils.setField(feedMessage, "id", MESSAGE_ID);
+                return feedMessage;
+            });
+
+            // when
+            FeedSendMessageResponse response = feedService.sendMessage(USER_ID, FEED_ID, MESSAGE, music);
+
+            // then
+            ArgumentCaptor<FeedMessage> messageCaptor = ArgumentCaptor.forClass(FeedMessage.class);
+            verify(feedMessageRepository).save(messageCaptor.capture());
+            assertThat(messageCaptor.getValue().getUser()).isEqualTo(me);
+            assertThat(messageCaptor.getValue().getFeed()).isEqualTo(feed);
+            assertThat(messageCaptor.getValue().getMusic()).isEqualTo(music);
+            assertThat(messageCaptor.getValue().getMessageContent()).isEqualTo(MESSAGE);
+
+            ArgumentCaptor<Notification> notificationCaptor = ArgumentCaptor.forClass(Notification.class);
+            verify(notificationRepository).save(notificationCaptor.capture());
+            Notification notification = notificationCaptor.getValue();
+            assertThat(notification.getReceiver()).isEqualTo(feedWriter);
+            assertThat(notification.getSender()).isEqualTo(me);
+            assertThat(notification.getType()).isEqualTo(NotificationType.FEED_MESSAGE);
+            assertThat(notification.getTargetId()).isEqualTo(MESSAGE_ID);
+            assertThat(notification.getIsRead()).isFalse();
+
+            assertThat(response.getFeedMessageId()).isEqualTo(MESSAGE_ID);
+            assertThat(response.getFeedId()).isEqualTo(FEED_ID);
+            assertThat(response.getNickname()).isEqualTo("튜니");
+            assertThat(response.getProfilePicture()).isEqualTo("me.png");
+            assertThat(response.getMusic().getMusicId()).isEqualTo(20L);
+            assertThat(response.getMessageContent()).isEqualTo(MESSAGE);
+        }
+
+        @Test
+        @DisplayName("내 피드에 메시지를 보내면 FEED_MESSAGE_SELF 예외가 발생하고 저장하지 않는다")
+        void selfFeed() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(me));
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.of(savedFeed(FEED_ID, me)));
+
+            // when & then
+            assertThatThrownBy(() -> feedService.sendMessage(USER_ID, FEED_ID, MESSAGE, newMusic()))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(FeedErrorCode.FEED_MESSAGE_SELF);
+
+            verify(feedMessageRepository, never()).save(any());
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("피드가 없으면 FEED_NOT_FOUND 예외가 발생하고 저장하지 않는다")
+        void feedNotFound() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(writer(USER_ID, "튜니", null)));
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> feedService.sendMessage(USER_ID, FEED_ID, MESSAGE, newMusic()))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(FeedErrorCode.FEED_NOT_FOUND);
+
+            verify(feedMessageRepository, never()).save(any());
+            verify(notificationRepository, never()).save(any());
         }
     }
 }

@@ -1,11 +1,10 @@
 package com.tuneet.tuneetbe.domain.feed.controller;
 
 import com.tuneet.tuneetbe.domain.feed.dto.request.FeedCreateRequest;
+import com.tuneet.tuneetbe.domain.feed.dto.request.FeedSendMessageRequest;
 import com.tuneet.tuneetbe.domain.feed.dto.request.FeedUpdateRequest;
-import com.tuneet.tuneetbe.domain.feed.dto.response.FeedCreateResponse;
-import com.tuneet.tuneetbe.domain.feed.dto.response.FeedDetailResponse;
-import com.tuneet.tuneetbe.domain.feed.dto.response.FeedListResponse;
-import com.tuneet.tuneetbe.domain.feed.dto.response.FeedUpdateResponse;
+import com.tuneet.tuneetbe.domain.feed.dto.response.*;
+import com.tuneet.tuneetbe.domain.feed.entity.FeedMessage;
 import com.tuneet.tuneetbe.domain.feed.service.FeedService;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.music.service.MusicCatalogService;
@@ -114,5 +113,23 @@ public class FeedController {
 
         // 응답 반환
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "피드 삭제 성공", null));
+    }
+
+    // 피드 메시지 작성
+    @Operation(summary = "피드 메시지 작성", description = "사용자가 피드를 보고 메시지를 작성할때 사용하는 API")
+    @PostMapping("/feeds/{feed-id}/messages")
+    public ResponseEntity<BaseResponse<FeedSendMessageResponse>> feedSendMessage(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody FeedSendMessageRequest request,
+            @PathVariable("feed-id") Long feedId) {
+
+        // 트랜잭션 밖에서 곡 확보
+        Music music = musicCatalogService.getOrCreateMusics(List.of(request.getMusicId())).get(0);
+
+        // service 호출
+        FeedSendMessageResponse response = feedService.sendMessage(userDetails.getUserId(), feedId, request.getMessageContent(), music);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(201, "피드 메시지 작성 성공", response));
     }
 }
