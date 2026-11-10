@@ -37,4 +37,11 @@ public class Feed extends BaseTimeEntity {
         this.music = music;
         this.content = content;
     }
+
+    public void updateFeed(Music music, String content) {
+        if (music != null) {
+            this.music = music;
+        }
+        this.content = content;
+    }
 }

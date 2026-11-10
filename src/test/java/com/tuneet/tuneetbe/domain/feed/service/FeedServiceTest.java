@@ -3,8 +3,10 @@ package com.tuneet.tuneetbe.domain.feed.service;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedCreateResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedDetailResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedListResponse;
+import com.tuneet.tuneetbe.domain.feed.dto.response.FeedUpdateResponse;
 import com.tuneet.tuneetbe.domain.feed.entity.Feed;
 import com.tuneet.tuneetbe.domain.feed.exception.FeedErrorCode;
+import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.user.entity.User;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -32,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -49,6 +53,9 @@ class FeedServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private FeedMessageRepository feedMessageRepository;
 
     @InjectMocks
     private FeedService feedService;
@@ -256,6 +263,149 @@ class FeedServiceTest {
             // then
             assertThat(response.getFeeds()).isEmpty();
             assertThat(response.getHasNext()).isFalse();
+        }
+    }
+
+    private Music newMusic() {
+        Music music = BeanUtils.instantiateClass(Music.class);
+        ReflectionTestUtils.setField(music, "id", 20L);
+        ReflectionTestUtils.setField(music, "title", "I GOT YOU");
+        ReflectionTestUtils.setField(music, "artist", "TWICE");
+        ReflectionTestUtils.setField(music, "musicPicture", "new-cover.png");
+        return music;
+    }
+
+    @Nested
+    @DisplayName("피드 수정")
+    class UpdateFeed {
+
+        private static final String NEW_CONTENT = "요즘 이 노래만 들어요";
+
+        @Test
+        @DisplayName("노래 없이 코멘트만 보내면 코멘트만 수정하고 기존 노래를 유지한다")
+        void contentOnly() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            Feed feed = savedFeed(FEED_ID, me);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(me));
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.of(feed));
+
+            // when
+            FeedUpdateResponse response = feedService.updateFeed(USER_ID, null, NEW_CONTENT, FEED_ID);
+
+            // then
+            assertThat(feed.getContent()).isEqualTo(NEW_CONTENT);
+            assertThat(feed.getMusic().getId()).isEqualTo(MUSIC_ID);
+            assertThat(response.getContent()).isEqualTo(NEW_CONTENT);
+            assertThat(response.getMusic().getMusicId()).isEqualTo(MUSIC_ID);
+            assertThat(response.getMusic().getTitle()).isEqualTo("Pretty Girl");
+        }
+
+        @Test
+        @DisplayName("노래와 코멘트를 보내면 둘 다 수정한다")
+        void musicAndContent() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            Feed feed = savedFeed(FEED_ID, me);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(me));
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.of(feed));
+
+            // when
+            FeedUpdateResponse response = feedService.updateFeed(USER_ID, newMusic(), NEW_CONTENT, FEED_ID);
+
+            // then
+            assertThat(feed.getMusic().getId()).isEqualTo(20L);
+            assertThat(response.getMusic().getMusicId()).isEqualTo(20L);
+            assertThat(response.getMusic().getTitle()).isEqualTo("I GOT YOU");
+            assertThat(response.getContent()).isEqualTo(NEW_CONTENT);
+        }
+
+        @Test
+        @DisplayName("다른 사용자의 피드를 수정하면 FEED_ACCESS_DENIED 예외가 발생하고 수정하지 않는다")
+        void otherUserFeed() {
+            // given
+            Feed feed = savedFeed(FEED_ID, writer(OTHER_USER_ID, "산책하는 튜니", null));
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(writer(USER_ID, "튜니", null)));
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.of(feed));
+
+            // when & then
+            assertThatThrownBy(() -> feedService.updateFeed(USER_ID, newMusic(), NEW_CONTENT, FEED_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(FeedErrorCode.FEED_ACCESS_DENIED);
+
+            assertThat(feed.getContent()).isEqualTo(CONTENT);
+            assertThat(feed.getMusic().getId()).isEqualTo(MUSIC_ID);
+        }
+
+        @Test
+        @DisplayName("피드가 없으면 FEED_NOT_FOUND 예외가 발생한다")
+        void feedNotFound() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(writer(USER_ID, "튜니", null)));
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> feedService.updateFeed(USER_ID, null, NEW_CONTENT, FEED_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(FeedErrorCode.FEED_NOT_FOUND);
+        }
+    }
+
+    @Nested
+    @DisplayName("피드 삭제")
+    class DeleteFeed {
+
+        @Test
+        @DisplayName("피드에 달린 메시지를 먼저 삭제한 뒤 피드를 삭제한다")
+        void success() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(me));
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.of(savedFeed(FEED_ID, me)));
+
+            // when
+            feedService.deleteFeed(USER_ID, FEED_ID);
+
+            // then
+            InOrder inOrder = inOrder(feedMessageRepository, feedRepository);
+            inOrder.verify(feedMessageRepository).deleteAllByFeedId(FEED_ID);
+            inOrder.verify(feedRepository).deleteById(FEED_ID);
+        }
+
+        @Test
+        @DisplayName("다른 사용자의 피드를 삭제하면 FEED_ACCESS_DENIED 예외가 발생하고 삭제하지 않는다")
+        void otherUserFeed() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(writer(USER_ID, "튜니", null)));
+            given(feedRepository.findById(FEED_ID))
+                    .willReturn(Optional.of(savedFeed(FEED_ID, writer(OTHER_USER_ID, "산책하는 튜니", null))));
+
+            // when & then
+            assertThatThrownBy(() -> feedService.deleteFeed(USER_ID, FEED_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(FeedErrorCode.FEED_ACCESS_DENIED);
+
+            verify(feedMessageRepository, never()).deleteAllByFeedId(any());
+            verify(feedRepository, never()).deleteById(any());
+        }
+
+        @Test
+        @DisplayName("피드가 없으면 FEED_NOT_FOUND 예외가 발생한다")
+        void feedNotFound() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(writer(USER_ID, "튜니", null)));
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> feedService.deleteFeed(USER_ID, FEED_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(FeedErrorCode.FEED_NOT_FOUND);
+
+            verify(feedRepository, never()).deleteById(any());
         }
     }
 }
