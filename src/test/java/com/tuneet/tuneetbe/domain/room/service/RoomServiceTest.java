@@ -1,7 +1,9 @@
 package com.tuneet.tuneetbe.domain.room.service;
 
 import com.tuneet.tuneetbe.domain.room.dto.request.RoomCreateRequest;
+import com.tuneet.tuneetbe.domain.room.dto.request.RoomEntryRequest;
 import com.tuneet.tuneetbe.domain.room.dto.response.RoomCreateResponse;
+import com.tuneet.tuneetbe.domain.room.dto.response.RoomEntryResponse;
 import com.tuneet.tuneetbe.domain.room.dto.response.RoomSummaryList;
 import com.tuneet.tuneetbe.domain.room.entity.Room;
 import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
@@ -282,6 +284,169 @@ class RoomServiceTest {
                     .isEqualTo(UserErrorCode.USER_NOT_FOUND);
 
             verify(roomUserRepository, never()).findAllByUserIdOrderByIdDesc(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("방 입장")
+    class EnterRoom {
+
+        private static final String HASHED = "hashed-1234";
+
+        private Room room(String password) {
+            Room room = Room.builder()
+                    .roomTitle("퇴근길 플리 모임")
+                    .password(password)
+                    .inviteCode(INVITE_CODE)
+                    .build();
+            ReflectionTestUtils.setField(room, "id", ROOM_ID);
+            return room;
+        }
+
+        private RoomEntryRequest entry(String password) {
+            RoomEntryRequest request = BeanUtils.instantiateClass(RoomEntryRequest.class);
+            ReflectionTestUtils.setField(request, "inviteCode", INVITE_CODE);
+            ReflectionTestUtils.setField(request, "password", password);
+            return request;
+        }
+
+        private void givenUserAndRoom(Room room) {
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(savedUser()));
+            given(roomRepository.findByInviteCode(INVITE_CODE)).willReturn(Optional.of(room));
+        }
+
+        @Test
+        @DisplayName("공개 방이면 비밀번호 없이 MEMBER로 저장한다")
+        void publicRoom() {
+            // given
+            givenUserAndRoom(room(null));
+            given(roomUserRepository.existsByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(false);
+
+            // when
+            RoomEntryResponse response = roomService.entryRoom(entry(null), USER_ID);
+
+            // then
+            ArgumentCaptor<RoomUser> captor = ArgumentCaptor.forClass(RoomUser.class);
+            verify(roomUserRepository).save(captor.capture());
+            assertThat(captor.getValue().getRole()).isEqualTo(RoomRole.MEMBER);
+            assertThat(captor.getValue().getUser().getId()).isEqualTo(USER_ID);
+            assertThat(captor.getValue().getRoom().getId()).isEqualTo(ROOM_ID);
+            assertThat(response.getRoomId()).isEqualTo(ROOM_ID);
+            assertThat(response.isAlreadyJoined()).isFalse();
+            verify(passwordEncoder, never()).matches(any(), any());
+        }
+
+        @Test
+        @DisplayName("공개 방에 비밀번호를 보내도 무시하고 입장한다")
+        void publicRoomIgnoresPassword() {
+            // given
+            givenUserAndRoom(room(null));
+            given(roomUserRepository.existsByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(false);
+
+            // when
+            RoomEntryResponse response = roomService.entryRoom(entry("1234"), USER_ID);
+
+            // then
+            assertThat(response.isAlreadyJoined()).isFalse();
+            verify(roomUserRepository).save(any(RoomUser.class));
+            verify(passwordEncoder, never()).matches(any(), any());
+        }
+
+        @Test
+        @DisplayName("잠긴 방에 비밀번호가 맞으면 입장한다")
+        void lockedRoomCorrectPassword() {
+            // given
+            givenUserAndRoom(room(HASHED));
+            given(roomUserRepository.existsByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(false);
+            given(passwordEncoder.matches("1234", HASHED)).willReturn(true);
+
+            // when
+            RoomEntryResponse response = roomService.entryRoom(entry("1234"), USER_ID);
+
+            // then
+            assertThat(response.isAlreadyJoined()).isFalse();
+            verify(roomUserRepository).save(any(RoomUser.class));
+        }
+
+        @Test
+        @DisplayName("잠긴 방에 비밀번호 없이 요청하면 ROOM_PASSWORD_REQUIRED 예외가 발생하고 저장하지 않는다")
+        void lockedRoomWithoutPassword() {
+            // given
+            givenUserAndRoom(room(HASHED));
+            given(roomUserRepository.existsByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(false);
+
+            // when & then
+            assertThatThrownBy(() -> roomService.entryRoom(entry(null), USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(RoomErrorCode.ROOM_PASSWORD_REQUIRED);
+
+            verify(roomUserRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("잠긴 방에 비밀번호가 틀리면 ROOM_PASSWORD_MISMATCH 예외가 발생하고 저장하지 않는다")
+        void lockedRoomWrongPassword() {
+            // given
+            givenUserAndRoom(room(HASHED));
+            given(roomUserRepository.existsByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(false);
+            given(passwordEncoder.matches("9999", HASHED)).willReturn(false);
+
+            // when & then
+            assertThatThrownBy(() -> roomService.entryRoom(entry("9999"), USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(RoomErrorCode.ROOM_PASSWORD_MISMATCH);
+
+            verify(roomUserRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("이미 멤버면 비밀번호 확인 없이 alreadyJoined=true를 반환하고 저장하지 않는다")
+        void alreadyJoined() {
+            // given
+            givenUserAndRoom(room(HASHED));
+            given(roomUserRepository.existsByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(true);
+
+            // when
+            RoomEntryResponse response = roomService.entryRoom(entry(null), USER_ID);
+
+            // then
+            assertThat(response.getRoomId()).isEqualTo(ROOM_ID);
+            assertThat(response.isAlreadyJoined()).isTrue();
+            verify(roomUserRepository, never()).save(any());
+            verify(passwordEncoder, never()).matches(any(), any());
+        }
+
+        @Test
+        @DisplayName("초대 코드에 맞는 방이 없으면 ROOM_NOT_FOUND 예외가 발생한다")
+        void roomNotFound() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(savedUser()));
+            given(roomRepository.findByInviteCode(INVITE_CODE)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> roomService.entryRoom(entry(null), USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(RoomErrorCode.ROOM_NOT_FOUND);
+
+            verify(roomUserRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("사용자가 없으면 USER_NOT_FOUND 예외가 발생한다")
+        void userNotFound() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> roomService.entryRoom(entry(null), USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+
+            verify(roomRepository, never()).findByInviteCode(any());
         }
     }
 }

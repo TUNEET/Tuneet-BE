@@ -1,7 +1,9 @@
 package com.tuneet.tuneetbe.domain.room.controller;
 
 import com.tuneet.tuneetbe.domain.room.dto.request.RoomCreateRequest;
+import com.tuneet.tuneetbe.domain.room.dto.request.RoomEntryRequest;
 import com.tuneet.tuneetbe.domain.room.dto.response.RoomCreateResponse;
+import com.tuneet.tuneetbe.domain.room.dto.response.RoomEntryResponse;
 import com.tuneet.tuneetbe.domain.room.dto.response.RoomSummaryList;
 import com.tuneet.tuneetbe.domain.room.service.RoomService;
 import com.tuneet.tuneetbe.global.common.BaseResponse;
@@ -10,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -44,5 +47,22 @@ public class RoomController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(BaseResponse.success(201, "방 생성 성공", roomCreateResponse));
+    }
+
+    @Operation(summary = "방 입장", description = "초대 코드(링크·QR)로 방에 입장하는 API. 잠긴 방은 비밀번호 4자리가 필요하며, 비밀번호 없이 요청하면 R4002를 응답한다")
+    @PostMapping("/entry")
+    public ResponseEntity<BaseResponse<RoomEntryResponse>> enterRoom(@AuthenticationPrincipal CustomUserDetails customUserDetails,
+                                                                     @Valid @RequestBody RoomEntryRequest roomEntryRequest) {
+        RoomEntryResponse roomEntryResponse;
+        try {
+            roomEntryResponse = roomService.entryRoom(roomEntryRequest, customUserDetails.getUserId());
+        } catch (DataIntegrityViolationException e) {
+            // 같은 사용자의 요청이 동시에 와서 먼저 온 요청이 이미 입장시킨 경우 -> 다시 조회하면 alreadyJoined
+            roomEntryResponse = roomService.entryRoom(roomEntryRequest, customUserDetails.getUserId());
+        }
+        boolean joined = roomEntryResponse.isAlreadyJoined();
+        return ResponseEntity
+                .status(joined ? HttpStatus.OK : HttpStatus.CREATED)
+                .body(BaseResponse.success(joined ? 200 : 201, joined ? "이미 참여 중인 방" : "방 입장 성공", roomEntryResponse));
     }
 }
