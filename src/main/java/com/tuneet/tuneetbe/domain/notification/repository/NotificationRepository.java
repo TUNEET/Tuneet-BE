@@ -12,6 +12,7 @@ import java.util.List;
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
     // 사용자가 받은 알림 전체 삭제
+    // TODO: 알림을 조회한 뒤 한 건씩 DELETE하기 때문에 알림이 많아지면 Modifying & Query로 한 번에 삭제하도록 변경하는 것이 좋을것 같음
     void deleteAllByReceiverId(Long receiverId);
 
     // 알림 종류와 대상 ID 목록에 해당하는 알림 삭제

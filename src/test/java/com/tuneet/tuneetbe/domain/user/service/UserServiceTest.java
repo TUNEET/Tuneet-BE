@@ -717,14 +717,14 @@ class UserServiceTest {
         }
 
         @Test
-        @DisplayName("프로필 사진만 보내면 닉네임은 유지하고 중복 검사를 하지 않는다")
+        @DisplayName("프로필 사진만 바꿀 때 기존 닉네임을 함께 보내면 닉네임은 유지하고 중복 검사를 하지 않는다")
         void pictureOnly() {
             // given
             User user = savedUser("튜니", "old.png");
             given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
 
             // when
-            userService.profileAdd(USER_ID, new ProfileAddRequest(null, "new.png"));
+            userService.profileAdd(USER_ID, new ProfileAddRequest("튜니", "new.png"));
 
             // then
             assertThat(user.getNickname()).isEqualTo("튜니");
