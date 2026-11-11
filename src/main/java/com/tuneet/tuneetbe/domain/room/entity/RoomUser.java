@@ -4,6 +4,7 @@ import com.tuneet.tuneetbe.domain.room.enums.RoomRole;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -29,6 +30,13 @@ public class RoomUser {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private RoomRole role; // 방장 / 멤버
+
+    @Builder
+    private RoomUser(Room room, User user, RoomRole role) {
+        this.room = room;
+        this.user = user;
+        this.role = role;
+    }
 
     // 방장 위임
     public void delegateOwner() {

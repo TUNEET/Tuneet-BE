@@ -1,6 +1,7 @@
 package com.tuneet.tuneetbe.domain.room.repository;
 
 import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -19,4 +20,7 @@ public interface RoomUserRepository extends JpaRepository<RoomUser, Long> {
 
     // 사용자의 방 멤버 정보 전체 삭제
     void deleteAllByUserId(Long userId);
+
+    @EntityGraph(attributePaths = "room")
+    List<RoomUser> findAllByUserIdOrderByIdDesc(Long userId);
 }
