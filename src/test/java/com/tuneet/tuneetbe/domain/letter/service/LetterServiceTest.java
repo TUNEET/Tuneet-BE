@@ -80,7 +80,7 @@ class LetterServiceTest {
     }
 
     private void givenSentToday(long count) {
-        given(letterRepository.countBySenderIdAndCreatedAtGreaterThanEqual(SENDER_ID, LocalDate.now().atStartOfDay()))
+        given(letterRepository.countBySenderIdAndParentLetterIsNullAndCreatedAtGreaterThanEqual(SENDER_ID, LocalDate.now().atStartOfDay()))
                 .willReturn(count);
     }
 
@@ -665,6 +665,258 @@ class LetterServiceTest {
 
             // then
             assertThat(response.getRemaining()).isZero();
+        }
+    }
+
+    private Letter replyLetter(Long id, User sender, User receiver, Letter parentLetter) {
+        Letter letter = Letter.builder()
+                .sender(sender)
+                .receiver(receiver)
+                .music(savedMusic())
+                .letterContent("고마워! 너도 힘내")
+                .isRandom(false)
+                .parentLetter(parentLetter)
+                .build();
+        ReflectionTestUtils.setField(letter, "id", id);
+        return letter;
+    }
+
+    @Nested
+    @DisplayName("편지 답장 보내기")
+    class LetterReply {
+
+        private static final Long PARENT_LETTER_ID = 50L;
+
+        @Test
+        @DisplayName("원래 편지를 보낸 사람에게 답장 대상 편지를 연결해 저장하고 하루 편지 수는 확인하지 않는다")
+        void success() {
+            // given
+            User original = savedUser(SENDER_ID, "튜니");
+            User me = savedUser(RECEIVER_ID, "원이");
+            Letter parentLetter = savedLetter(PARENT_LETTER_ID, original, me);
+            given(userRepository.findById(RECEIVER_ID)).willReturn(Optional.of(me));
+            given(letterRepository.findById(PARENT_LETTER_ID)).willReturn(Optional.of(parentLetter));
+            givenSaveReturnsLetterWithId();
+
+            // when
+            LetterSendResponse response = letterService.letterReply(RECEIVER_ID, PARENT_LETTER_ID, savedMusic(), CONTENT);
+
+            // then
+            ArgumentCaptor<Letter> captor = ArgumentCaptor.forClass(Letter.class);
+            verify(letterRepository).save(captor.capture());
+            Letter reply = captor.getValue();
+            assertThat(reply.getSender()).isEqualTo(me);
+            assertThat(reply.getReceiver()).isEqualTo(original);
+            assertThat(reply.getParentLetter()).isEqualTo(parentLetter);
+            assertThat(reply.getIsRandom()).isFalse();
+            assertThat(reply.getLetterContent()).isEqualTo(CONTENT);
+
+            assertThat(response.getLetterId()).isEqualTo(LETTER_ID);
+            assertThat(response.getSenderNickname()).isEqualTo("원이");
+            assertThat(response.getReceiverNickname()).isEqualTo("튜니");
+            verify(letterRepository, never()).countBySenderIdAndParentLetterIsNullAndCreatedAtGreaterThanEqual(any(), any());
+        }
+
+        @Test
+        @DisplayName("내가 받은 편지가 아니면 LETTER_NOT_FOUND 예외가 발생하고 저장하지 않는다")
+        void notMyLetter() {
+            // given
+            Letter parentLetter = savedLetter(PARENT_LETTER_ID, savedUser(SENDER_ID, "튜니"), savedUser(RECEIVER_ID, "원이"));
+            given(userRepository.findById(3L)).willReturn(Optional.of(savedUser(3L, "다른 사람")));
+            given(letterRepository.findById(PARENT_LETTER_ID)).willReturn(Optional.of(parentLetter));
+
+            // when & then
+            assertThatThrownBy(() -> letterService.letterReply(3L, PARENT_LETTER_ID, savedMusic(), CONTENT))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(LetterErrorCode.LETTER_NOT_FOUND);
+
+            verify(letterRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("내가 편지함에서 삭제한 편지면 LETTER_NOT_FOUND 예외가 발생한다")
+        void deletedByReceiver() {
+            // given
+            User me = savedUser(RECEIVER_ID, "원이");
+            Letter parentLetter = savedLetter(PARENT_LETTER_ID, savedUser(SENDER_ID, "튜니"), me);
+            parentLetter.deleteByReceiver();
+            given(userRepository.findById(RECEIVER_ID)).willReturn(Optional.of(me));
+            given(letterRepository.findById(PARENT_LETTER_ID)).willReturn(Optional.of(parentLetter));
+
+            // when & then
+            assertThatThrownBy(() -> letterService.letterReply(RECEIVER_ID, PARENT_LETTER_ID, savedMusic(), CONTENT))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(LetterErrorCode.LETTER_NOT_FOUND);
+
+            verify(letterRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("답장 대상 편지가 없으면 LETTER_NOT_FOUND 예외가 발생한다")
+        void parentNotFound() {
+            // given
+            given(userRepository.findById(RECEIVER_ID)).willReturn(Optional.of(savedUser(RECEIVER_ID, "원이")));
+            given(letterRepository.findById(PARENT_LETTER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> letterService.letterReply(RECEIVER_ID, PARENT_LETTER_ID, savedMusic(), CONTENT))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(LetterErrorCode.LETTER_NOT_FOUND);
+        }
+
+        @Test
+        @DisplayName("원래 편지를 보낸 사람이 탈퇴했으면 LETTER_REPLY_TO_DELETED_USER 예외가 발생한다")
+        void deletedSender() {
+            // given
+            User original = savedUser(SENDER_ID, "튜니");
+            original.deleteUser(LocalDateTime.now());
+            User me = savedUser(RECEIVER_ID, "원이");
+            given(userRepository.findById(RECEIVER_ID)).willReturn(Optional.of(me));
+            given(letterRepository.findById(PARENT_LETTER_ID)).willReturn(Optional.of(savedLetter(PARENT_LETTER_ID, original, me)));
+
+            // when & then
+            assertThatThrownBy(() -> letterService.letterReply(RECEIVER_ID, PARENT_LETTER_ID, savedMusic(), CONTENT))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(LetterErrorCode.LETTER_REPLY_TO_DELETED_USER);
+
+            verify(letterRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("원래 편지를 보낸 사람이 편지 받기를 껐으면 LETTER_NOT_RECEIVABLE 예외가 발생한다")
+        void notReceivable() {
+            // given
+            User original = savedUser(SENDER_ID, "튜니");
+            original.updateSettings(null, false);
+            User me = savedUser(RECEIVER_ID, "원이");
+            given(userRepository.findById(RECEIVER_ID)).willReturn(Optional.of(me));
+            given(letterRepository.findById(PARENT_LETTER_ID)).willReturn(Optional.of(savedLetter(PARENT_LETTER_ID, original, me)));
+
+            // when & then
+            assertThatThrownBy(() -> letterService.letterReply(RECEIVER_ID, PARENT_LETTER_ID, savedMusic(), CONTENT))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(LetterErrorCode.LETTER_NOT_RECEIVABLE);
+
+            verify(letterRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("이미 답장한 편지면 LETTER_ALREADY_REPLIED 예외가 발생하고 저장하지 않는다")
+        void alreadyReplied() {
+            // given
+            User me = savedUser(RECEIVER_ID, "원이");
+            given(userRepository.findById(RECEIVER_ID)).willReturn(Optional.of(me));
+            given(letterRepository.findById(PARENT_LETTER_ID))
+                    .willReturn(Optional.of(savedLetter(PARENT_LETTER_ID, savedUser(SENDER_ID, "튜니"), me)));
+            given(letterRepository.existsByParentLetterId(PARENT_LETTER_ID)).willReturn(true);
+
+            // when & then
+            assertThatThrownBy(() -> letterService.letterReply(RECEIVER_ID, PARENT_LETTER_ID, savedMusic(), CONTENT))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(LetterErrorCode.LETTER_ALREADY_REPLIED);
+
+            verify(letterRepository, never()).save(any());
+        }
+
+    }
+
+    @Nested
+    @DisplayName("답장 정보 조회")
+    class ReplyInfo {
+
+        @Test
+        @DisplayName("답장 상세보기는 답장 여부와 답장 대상인 이전 편지를 함께 반환한다")
+        void detailWithParent() {
+            // given
+            User tuni = savedUser(SENDER_ID, "튜니");
+            User woni = savedUser(RECEIVER_ID, "원이");
+            Letter parentLetter = savedLetter(50L, tuni, woni);
+            Letter reply = replyLetter(LETTER_ID, woni, tuni, parentLetter);
+            given(letterRepository.findById(LETTER_ID)).willReturn(Optional.of(reply));
+
+            // when
+            LetterDetailResponse response = letterService.letterDetail(SENDER_ID, LETTER_ID);
+
+            // then
+            assertThat(response.getIsReply()).isTrue();
+            assertThat(response.getParentLetter().getLetterId()).isEqualTo(50L);
+            assertThat(response.getParentLetter().getLetterContent()).isEqualTo(CONTENT);
+            assertThat(response.getParentLetter().getMusic().getTitle()).isEqualTo("Pretty Girl");
+        }
+
+        @Test
+        @DisplayName("상대가 편지함에서 삭제한 이전 편지도 답장 상세에 표시한다")
+        void parentDeletedByOther() {
+            // given
+            User tuni = savedUser(SENDER_ID, "튜니");
+            User woni = savedUser(RECEIVER_ID, "원이");
+            Letter parentLetter = savedLetter(50L, tuni, woni);
+            parentLetter.deleteByReceiver();
+            given(letterRepository.findById(LETTER_ID)).willReturn(Optional.of(replyLetter(LETTER_ID, woni, tuni, parentLetter)));
+
+            // when
+            LetterDetailResponse response = letterService.letterDetail(SENDER_ID, LETTER_ID);
+
+            // then
+            assertThat(response.getParentLetter().getLetterId()).isEqualTo(50L);
+        }
+
+        @Test
+        @DisplayName("일반 편지 상세보기는 답장 여부가 false이고 이전 편지가 없다")
+        void detailWithoutParent() {
+            // given
+            given(letterRepository.findById(LETTER_ID))
+                    .willReturn(Optional.of(savedLetter(LETTER_ID, savedUser(SENDER_ID, "튜니"), savedUser(RECEIVER_ID, "원이"))));
+
+            // when
+            LetterDetailResponse response = letterService.letterDetail(RECEIVER_ID, LETTER_ID);
+
+            // then
+            assertThat(response.getIsReply()).isFalse();
+            assertThat(response.getParentLetter()).isNull();
+            assertThat(response.getIsReplied()).isFalse();
+        }
+
+        @Test
+        @DisplayName("내가 이미 답장한 편지면 상세의 isReplied가 true다")
+        void repliedDetail() {
+            // given
+            given(letterRepository.findById(LETTER_ID))
+                    .willReturn(Optional.of(savedLetter(LETTER_ID, savedUser(SENDER_ID, "튜니"), savedUser(RECEIVER_ID, "원이"))));
+            given(letterRepository.existsByParentLetterId(LETTER_ID)).willReturn(true);
+
+            // when
+            LetterDetailResponse response = letterService.letterDetail(RECEIVER_ID, LETTER_ID);
+
+            // then
+            assertThat(response.getIsReplied()).isTrue();
+        }
+
+        @Test
+        @DisplayName("목록은 답장 여부만 반환하고 이전 편지는 포함하지 않는다")
+        void listWithoutParent() {
+            // given
+            User tuni = savedUser(SENDER_ID, "튜니");
+            User woni = savedUser(RECEIVER_ID, "원이");
+            Letter reply = replyLetter(LETTER_ID, woni, tuni, savedLetter(50L, tuni, woni));
+            PageRequest pageable = PageRequest.of(0, 20);
+            given(letterRepository.findByReceiverIdAndDeletedByReceiverFalseOrderByIdDesc(SENDER_ID, pageable))
+                    .willReturn(new SliceImpl<>(List.of(reply), pageable, false));
+
+            // when
+            LetterListResponse response = letterService.letterList(SENDER_ID, null, 20);
+
+            // then
+            assertThat(response.getLetters().get(0).getIsReply()).isTrue();
+            assertThat(response.getLetters().get(0).getParentLetter()).isNull();
+            assertThat(response.getLetters().get(0).getIsReplied()).isNull();
+            verify(letterRepository, never()).existsByParentLetterId(any());
         }
     }
 }

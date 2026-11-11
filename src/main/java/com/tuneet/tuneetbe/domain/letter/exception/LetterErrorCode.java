@@ -13,7 +13,9 @@ public enum LetterErrorCode implements BaseErrorCode {
     LETTER_SELF("L4002", "나에게는 편지를 보낼 수 없습니다.", HttpStatus.BAD_REQUEST),
     LETTER_NOT_RECEIVABLE("L4003", "편지를 받을 수 없는 사용자입니다.", HttpStatus.BAD_REQUEST),
     LETTER_DAILY_LIMIT_EXCEEDED("L4004", "오늘 보낼 수 있는 편지를 모두 사용했습니다.", HttpStatus.BAD_REQUEST),
-    LETTER_NO_RANDOM_RECEIVER("L4005", "지금은 편지를 받을 수 있는 사용자가 없습니다.", HttpStatus.BAD_REQUEST);
+    LETTER_NO_RANDOM_RECEIVER("L4005", "지금은 편지를 받을 수 있는 사용자가 없습니다.", HttpStatus.BAD_REQUEST),
+    LETTER_REPLY_TO_DELETED_USER("L4006", "탈퇴한 사용자에게는 답장할 수 없습니다.", HttpStatus.BAD_REQUEST),
+    LETTER_ALREADY_REPLIED("L4007", "이미 답장한 편지입니다.", HttpStatus.CONFLICT);
 
     private final String code;
     private final String message;

@@ -189,7 +189,11 @@ public class LetterService {
         letter.markAsRead(LocalDateTime.now());
 
         // 응답 반환
-        return toLetterDetailResponse(letter);
+        // 내가 이 편지에 이미 답장했는지 (답장하기 버튼 표시용)
+        boolean isReplied = letterRepository.existsByParentLetterId(letterId);
+
+        // 답장이면 답장 대상 편지(내가 보낸 편지)도 함께 반환 (상대가 편지함에서 삭제했어도 표시)
+        return toLetterDetailResponse(letter, toParentLetter(letter.getParentLetter()), isReplied);
     }
 
     // 편지 리스트 보기
@@ -211,7 +215,8 @@ public class LetterService {
         // 응답 목록 세팅
         List<LetterDetailResponse> letterResponses = new ArrayList<>();
         for (Letter letter : letters.getContent()) {
-            letterResponses.add(toLetterDetailResponse(letter));
+            // 목록에서는 답장 대상 편지를 조회하지 않음 (편지마다 추가 조회가 생기는 N+1 방지)
+            letterResponses.add(toLetterDetailResponse(letter, null, null));
         }
 
         // 응답 반환
@@ -222,7 +227,7 @@ public class LetterService {
     }
 
     // Letter 엔티티를 응답 dto로 변환
-    private LetterDetailResponse toLetterDetailResponse(Letter letter) {
+    private LetterDetailResponse toLetterDetailResponse(Letter letter, LetterDetailResponse.ParentLetter parentLetter, Boolean isReplied) {
 
         User sender = letter.getSender(); // 보낸 사람
         Music music = letter.getMusic(); // 편지에 담긴 노래
@@ -248,7 +253,32 @@ public class LetterService {
                         .build())
                 .letterContent(letter.getLetterContent())
                 .isRead(letter.getReadAt() != null)
+                .isReply(letter.getParentLetter() != null)
+                .isReplied(isReplied)
+                .parentLetter(parentLetter)
                 .createdAt(letter.getCreatedAt())
+                .build();
+    }
+
+    // 답장 대상 편지를 응답 dto로 변환 (답장이 아니면 null)
+    private LetterDetailResponse.ParentLetter toParentLetter(Letter parentLetter) {
+
+        if (parentLetter == null) {
+            return null;
+        }
+
+        Music music = parentLetter.getMusic(); // 답장 대상 편지에 담긴 노래
+
+        return LetterDetailResponse.ParentLetter.builder()
+                .letterId(parentLetter.getId())
+                .letterContent(parentLetter.getLetterContent())
+                .music(MusicResponse.builder()
+                        .musicId(music.getId())
+                        .title(music.getTitle())
+                        .artist(music.getArtist())
+                        .musicPicture(music.getMusicPicture())
+                        .build())
+                .createdAt(parentLetter.getCreatedAt())
                 .build();
     }
 
@@ -305,9 +335,77 @@ public class LetterService {
                 .build();
     }
 
-    // 오늘 자정 이후 보낸 편지 수
+    // 오늘 자정 이후 보낸 편지 수 (답장 제외)
     private long countTodaySentLetters(Long userId) {
         LocalDateTime todayStart = LocalDate.now().atStartOfDay();
-        return letterRepository.countBySenderIdAndCreatedAtGreaterThanEqual(userId, todayStart);
+        return letterRepository.countBySenderIdAndParentLetterIsNullAndCreatedAtGreaterThanEqual(userId, todayStart);
+    }
+
+    // 편지 답장 보내기
+    @Transactional
+    public LetterSendResponse letterReply(Long userId, Long letterId, Music music, String letterContent) {
+
+        // 보내는 사람 조회
+        User sender = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 답장 대상 편지 조회
+        Letter parentLetter = letterRepository.findById(letterId)
+                .orElseThrow(() -> new CustomException(LetterErrorCode.LETTER_NOT_FOUND));
+
+        // 내가 받은 편지인지, 삭제하지 않았는지 확인
+        if (!parentLetter.getReceiver().getId().equals(userId) || parentLetter.getDeletedByReceiver()) {
+            log.warn("[LetterService] 답장할 수 없는 편지입니다.");
+            throw new CustomException(LetterErrorCode.LETTER_NOT_FOUND);
+        }
+
+        // 이미 답장한 편지인지 확인 (한 편지에는 답장을 한 번만 보낼 수 있음)
+        if (letterRepository.existsByParentLetterId(letterId)) {
+            log.warn("[LetterService] 이미 답장한 편지입니다.");
+            throw new CustomException(LetterErrorCode.LETTER_ALREADY_REPLIED);
+        }
+
+        // 받는 사람은 답장 대상 편지를 보낸 사람
+        User receiver = parentLetter.getSender();
+
+        // 사용자가 탈퇴했는지 확인
+        if (receiver.isDeleted()) {
+            log.warn("[LetterService] 탈퇴한 사용자에게는 답장을 보낼 수 없습니다.");
+            throw new CustomException(LetterErrorCode.LETTER_REPLY_TO_DELETED_USER);
+        }
+
+        // 받는 사람의 편지 받기 설정 확인
+        if (!receiver.getLetterReceivable()) {
+            log.warn("[LetterService] 편지 수신 거부 사용자에게는 답장을 보낼 수 없습니다.");
+            throw new CustomException(LetterErrorCode.LETTER_NOT_RECEIVABLE);
+        }
+
+        // DB 저장
+        Letter letter = letterRepository.save(Letter.builder()
+                .sender(sender)
+                .receiver(receiver)
+                .music(music)
+                .letterContent(letterContent)
+                .isRandom(false)
+                .parentLetter(parentLetter)
+                .build());
+
+        // 로그 출력
+        log.info("[LetterService] 답장 편지 발송 성공: letterId = {}", letter.getId());
+
+        // 응답 반환
+        return LetterSendResponse.builder()
+                .letterId(letter.getId())
+                .senderNickname(sender.getNickname())
+                .music(MusicResponse.builder()
+                        .musicId(music.getId())
+                        .title(music.getTitle())
+                        .artist(music.getArtist())
+                        .musicPicture(music.getMusicPicture())
+                        .build())
+                .letterContent(letter.getLetterContent())
+                .receiverNickname(receiver.getNickname())
+                .createdAt(letter.getCreatedAt())
+                .build();
     }
 }

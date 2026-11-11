@@ -47,17 +47,22 @@ public class Letter {
 
     private LocalDateTime readAt; // 읽은 일시
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_letter_id")
+    private Letter parentLetter; // 답장 대상인 바로 이전 편지 (일반 편지면 null)
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt; // 보낸 일시
 
     @Builder
-    private Letter(User sender, User receiver, Music music, String letterContent, Boolean isRandom) {
+    private Letter(User sender, User receiver, Music music, String letterContent, Boolean isRandom, Letter parentLetter) {
         this.sender = sender;
         this.receiver = receiver;
         this.music = music;
         this.letterContent = letterContent;
         this.isRandom = isRandom;
+        this.parentLetter = parentLetter;
     }
 
     // 처음 읽을 때만 읽은 시간 저장
