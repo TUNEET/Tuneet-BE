@@ -1,14 +1,23 @@
 package com.tuneet.tuneetbe.domain.room.service;
 
+import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.room.dto.request.RoomCreateRequest;
 import com.tuneet.tuneetbe.domain.room.dto.request.RoomEntryRequest;
 import com.tuneet.tuneetbe.domain.room.dto.response.RoomCreateResponse;
 import com.tuneet.tuneetbe.domain.room.dto.response.RoomEntryResponse;
+import com.tuneet.tuneetbe.domain.room.dto.response.RoomHomeResponse;
+import com.tuneet.tuneetbe.domain.room.dto.response.RoomUserListResponse;
+import com.tuneet.tuneetbe.domain.room.dto.response.RoomUserResponse;
+import com.tuneet.tuneetbe.domain.room.dto.response.RoomUserSummaryResponse;
 import com.tuneet.tuneetbe.domain.room.dto.response.RoomSummaryList;
 import com.tuneet.tuneetbe.domain.room.entity.Room;
+import com.tuneet.tuneetbe.domain.room.entity.RoomPlaylist;
+import com.tuneet.tuneetbe.domain.room.entity.RoomPost;
 import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
 import com.tuneet.tuneetbe.domain.room.enums.RoomRole;
 import com.tuneet.tuneetbe.domain.room.exception.RoomErrorCode;
+import com.tuneet.tuneetbe.domain.room.repository.RoomPlaylistRepository;
+import com.tuneet.tuneetbe.domain.room.repository.RoomPostRepository;
 import com.tuneet.tuneetbe.domain.room.repository.RoomRepository;
 import com.tuneet.tuneetbe.domain.room.repository.RoomUserRepository;
 import com.tuneet.tuneetbe.domain.room.util.InviteCodeGenerator;
@@ -64,6 +73,12 @@ class RoomServiceTest {
 
     @Mock
     private InviteCodeGenerator inviteCodeGenerator;
+
+    @Mock
+    private RoomPostRepository roomPostRepository;
+
+    @Mock
+    private RoomPlaylistRepository roomPlaylistRepository;
 
     @InjectMocks
     private RoomService roomService;
@@ -448,5 +463,257 @@ class RoomServiceTest {
 
             verify(roomRepository, never()).findByInviteCode(any());
         }
+    }
+
+    @Nested
+    @DisplayName("방 홈 화면 조회")
+    class GetRoomHome {
+
+        private Room room() {
+            Room room = Room.builder()
+                    .roomTitle("퇴근길 플리 모임")
+                    .roomDescription("퇴근길에 듣는 노래를 공유해요")
+                    .password("hashed-1234")
+                    .inviteCode(INVITE_CODE)
+                    .build();
+            ReflectionTestUtils.setField(room, "id", ROOM_ID);
+            return room;
+        }
+
+        @Test
+        @DisplayName("방 정보, 내 역할, 방장이 앞인 멤버 목록, 포스트, 플레이리스트를 함께 반환한다")
+        void returnsHome() {
+            // given
+            Room room = room();
+            List<RoomUser> members = List.of(
+                    member(room, 10L, user(USER_ID, "나"), RoomRole.MEMBER),
+                    member(room, 11L, user(3L, "멤버"), RoomRole.MEMBER),
+                    member(room, 12L, user(2L, "방장"), RoomRole.OWNER));
+            Music music = music(7L, "Hype Boy");
+            given(roomRepository.findById(ROOM_ID)).willReturn(Optional.of(room));
+            given(roomUserRepository.findAllByRoomOrderByIdAsc(room)).willReturn(members);
+            given(roomPostRepository.findTop2ByRoomOrderByCreatedAtDescIdDesc(room))
+                    .willReturn(List.of(post(20L, user(2L, "방장"), music, "요즘 계속 듣는 노래")));
+            given(roomPlaylistRepository.findTop2ByRoomOrderByPositionAsc(room))
+                    .willReturn(List.of(playlist(30L, music, 1)));
+
+            // when
+            RoomHomeResponse response = roomService.getRoomHome(ROOM_ID, USER_ID);
+
+            // then
+            assertThat(response.getRoomId()).isEqualTo(ROOM_ID);
+            assertThat(response.getRoomTitle()).isEqualTo("퇴근길 플리 모임");
+            assertThat(response.getInviteCode()).isEqualTo(INVITE_CODE);
+            assertThat(response.isHasPassword()).isTrue();
+            assertThat(response.getMyRole()).isEqualTo(RoomRole.MEMBER);
+            assertThat(response.getMemberCount()).isEqualTo(3);
+
+            assertThat(response.getRoomUsers())
+                    .extracting(RoomUserSummaryResponse::getUserId, RoomUserSummaryResponse::getNickname, RoomUserSummaryResponse::getRole)
+                    .containsExactly(
+                            tuple(2L, "방장", RoomRole.OWNER),
+                            tuple(USER_ID, "나", RoomRole.MEMBER),
+                            tuple(3L, "멤버", RoomRole.MEMBER));
+
+            assertThat(response.getRoomPosts()).singleElement().satisfies(post -> {
+                assertThat(post.getRoomPostId()).isEqualTo(20L);
+                assertThat(post.getNickname()).isEqualTo("방장");
+                assertThat(post.getContent()).isEqualTo("요즘 계속 듣는 노래");
+                assertThat(post.getMusic().getMusicId()).isEqualTo(7L);
+                assertThat(post.getMusic().getTitle()).isEqualTo("Hype Boy");
+            });
+            assertThat(response.getRoomPlaylists()).singleElement().satisfies(item -> {
+                assertThat(item.getRoomPlaylistId()).isEqualTo(30L);
+                assertThat(item.getPosition()).isEqualTo(1);
+                assertThat(item.getMusic().getMusicId()).isEqualTo(7L);
+            });
+        }
+
+        @Test
+        @DisplayName("포스트와 플레이리스트가 없으면 빈 목록을 반환한다")
+        void emptyLists() {
+            // given
+            Room room = room();
+            given(roomRepository.findById(ROOM_ID)).willReturn(Optional.of(room));
+            given(roomUserRepository.findAllByRoomOrderByIdAsc(room))
+                    .willReturn(List.of(member(room, 10L, user(USER_ID, "나"), RoomRole.OWNER)));
+            given(roomPostRepository.findTop2ByRoomOrderByCreatedAtDescIdDesc(room)).willReturn(List.of());
+            given(roomPlaylistRepository.findTop2ByRoomOrderByPositionAsc(room)).willReturn(List.of());
+
+            // when
+            RoomHomeResponse response = roomService.getRoomHome(ROOM_ID, USER_ID);
+
+            // then
+            assertThat(response.getMyRole()).isEqualTo(RoomRole.OWNER);
+            assertThat(response.getRoomPosts()).isEmpty();
+            assertThat(response.getRoomPlaylists()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("방이 없으면 ROOM_NOT_FOUND 예외가 발생한다")
+        void roomNotFound() {
+            // given
+            given(roomRepository.findById(ROOM_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> roomService.getRoomHome(ROOM_ID, USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(RoomErrorCode.ROOM_NOT_FOUND);
+            verify(roomUserRepository, never()).findAllByRoomOrderByIdAsc(any());
+        }
+
+        @Test
+        @DisplayName("방 멤버가 아니면 NOT_ROOM_MEMBER 예외가 발생하고 포스트와 플레이리스트는 조회하지 않는다")
+        void notMember() {
+            // given
+            Room room = room();
+            given(roomRepository.findById(ROOM_ID)).willReturn(Optional.of(room));
+            given(roomUserRepository.findAllByRoomOrderByIdAsc(room))
+                    .willReturn(List.of(member(room, 12L, user(2L, "방장"), RoomRole.OWNER)));
+
+            // when & then
+            assertThatThrownBy(() -> roomService.getRoomHome(ROOM_ID, USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(RoomErrorCode.NOT_ROOM_MEMBER);
+            verify(roomPostRepository, never()).findTop2ByRoomOrderByCreatedAtDescIdDesc(any());
+            verify(roomPlaylistRepository, never()).findTop2ByRoomOrderByPositionAsc(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("방 멤버 목록 조회")
+    class GetRoomUserList {
+
+        private Room room() {
+            Room room = Room.builder()
+                    .roomTitle("퇴근길 플리 모임")
+                    .roomDescription("퇴근길에 듣는 노래를 공유해요")
+                    .inviteCode(INVITE_CODE)
+                    .build();
+            ReflectionTestUtils.setField(room, "id", ROOM_ID);
+            return room;
+        }
+
+        @Test
+        @DisplayName("나를 제외하고 방장을 맨 앞에 둔 멤버 목록을 반환한다")
+        void excludesMeAndOwnerFirst() {
+            // given
+            Room room = room();
+            User owner = user(2L, "방장");
+            ReflectionTestUtils.setField(owner, "profileMusic", music(7L, "Hype Boy"));
+            given(roomRepository.findById(ROOM_ID)).willReturn(Optional.of(room));
+            given(roomUserRepository.findAllWithProfileMusicByRoomOrderByIdAsc(room)).willReturn(List.of(
+                    member(room, 10L, user(USER_ID, "나"), RoomRole.MEMBER),
+                    member(room, 11L, user(3L, "멤버"), RoomRole.MEMBER),
+                    member(room, 12L, owner, RoomRole.OWNER)));
+
+            // when
+            RoomUserListResponse response = roomService.getRoomUserList(ROOM_ID, USER_ID);
+
+            // then
+            assertThat(response.getRoomId()).isEqualTo(ROOM_ID);
+            assertThat(response.getRoomTitle()).isEqualTo("퇴근길 플리 모임");
+            assertThat(response.getRoomUsers())
+                    .extracting(RoomUserResponse::getUserId, RoomUserResponse::getRole)
+                    .containsExactly(
+                            tuple(2L, RoomRole.OWNER),
+                            tuple(3L, RoomRole.MEMBER));
+            assertThat(response.getRoomUsers().get(0).getMusic().getTitle()).isEqualTo("Hype Boy");
+        }
+
+        @Test
+        @DisplayName("프로필 음악이 없는 멤버는 music이 null이다")
+        void noProfileMusic() {
+            // given
+            Room room = room();
+            given(roomRepository.findById(ROOM_ID)).willReturn(Optional.of(room));
+            given(roomUserRepository.findAllWithProfileMusicByRoomOrderByIdAsc(room)).willReturn(List.of(
+                    member(room, 10L, user(USER_ID, "나"), RoomRole.OWNER),
+                    member(room, 11L, user(3L, "멤버"), RoomRole.MEMBER)));
+
+            // when
+            RoomUserListResponse response = roomService.getRoomUserList(ROOM_ID, USER_ID);
+
+            // then
+            assertThat(response.getRoomUsers()).singleElement().satisfies(member -> {
+                assertThat(member.getUserId()).isEqualTo(3L);
+                assertThat(member.getMusic()).isNull();
+            });
+        }
+
+        @Test
+        @DisplayName("방이 없으면 ROOM_NOT_FOUND 예외가 발생한다")
+        void roomNotFound() {
+            // given
+            given(roomRepository.findById(ROOM_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> roomService.getRoomUserList(ROOM_ID, USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(RoomErrorCode.ROOM_NOT_FOUND);
+        }
+
+        @Test
+        @DisplayName("방 멤버가 아니면 NOT_ROOM_MEMBER 예외가 발생한다")
+        void notMember() {
+            // given
+            Room room = room();
+            given(roomRepository.findById(ROOM_ID)).willReturn(Optional.of(room));
+            given(roomUserRepository.findAllWithProfileMusicByRoomOrderByIdAsc(room))
+                    .willReturn(List.of(member(room, 12L, user(2L, "방장"), RoomRole.OWNER)));
+
+            // when & then
+            assertThatThrownBy(() -> roomService.getRoomUserList(ROOM_ID, USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(RoomErrorCode.NOT_ROOM_MEMBER);
+        }
+    }
+
+    private User user(Long id, String nickname) {
+        User user = User.builder()
+                .email(id + "@email.com")
+                .password("encoded-password")
+                .termsAgreedAt(LocalDateTime.now())
+                .privacyAgreedAt(LocalDateTime.now())
+                .build();
+        ReflectionTestUtils.setField(user, "id", id);
+        ReflectionTestUtils.setField(user, "nickname", nickname);
+        return user;
+    }
+
+    private RoomUser member(Room room, Long roomUserId, User user, RoomRole role) {
+        RoomUser roomUser = RoomUser.builder().room(room).user(user).role(role).build();
+        ReflectionTestUtils.setField(roomUser, "id", roomUserId);
+        return roomUser;
+    }
+
+    private Music music(Long id, String title) {
+        Music music = BeanUtils.instantiateClass(Music.class);
+        ReflectionTestUtils.setField(music, "id", id);
+        ReflectionTestUtils.setField(music, "title", title);
+        ReflectionTestUtils.setField(music, "artist", "NewJeans");
+        return music;
+    }
+
+    private RoomPost post(Long id, User user, Music music, String content) {
+        RoomPost post = BeanUtils.instantiateClass(RoomPost.class);
+        ReflectionTestUtils.setField(post, "id", id);
+        ReflectionTestUtils.setField(post, "user", user);
+        ReflectionTestUtils.setField(post, "music", music);
+        ReflectionTestUtils.setField(post, "roomPostContent", content);
+        ReflectionTestUtils.setField(post, "createdAt", LocalDateTime.now());
+        return post;
+    }
+
+    private RoomPlaylist playlist(Long id, Music music, int position) {
+        RoomPlaylist playlist = BeanUtils.instantiateClass(RoomPlaylist.class);
+        ReflectionTestUtils.setField(playlist, "id", id);
+        ReflectionTestUtils.setField(playlist, "music", music);
+        ReflectionTestUtils.setField(playlist, "position", position);
+        return playlist;
     }
 }

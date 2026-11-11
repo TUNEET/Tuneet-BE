@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.room.repository;
 
+import com.tuneet.tuneetbe.domain.room.entity.Room;
 import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -25,4 +26,10 @@ public interface RoomUserRepository extends JpaRepository<RoomUser, Long> {
     List<RoomUser> findAllByUserIdOrderByIdDesc(Long userId);
 
     boolean existsByRoomIdAndUserId(Long roomId, Long userId);
+
+    @EntityGraph(attributePaths = "user")
+    List<RoomUser> findAllByRoomOrderByIdAsc(Room room);
+
+    @EntityGraph(attributePaths = {"user", "user.profileMusic"})
+    List<RoomUser> findAllWithProfileMusicByRoomOrderByIdAsc(Room room);
 }

@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.music.dto.response;
 
+import com.tuneet.tuneetbe.domain.music.entity.Music;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,4 +25,13 @@ public class MusicResponse {
 
     @Schema(description = "앨범 커버 이미지 url", example = "https://...")
     private String musicPicture;
+
+    public static MusicResponse from(Music music) {
+        return MusicResponse.builder()
+                .musicId(music.getId())
+                .title(music.getTitle())
+                .artist(music.getArtist())
+                .musicPicture(music.getMusicPicture())
+                .build();
+    }
 }
