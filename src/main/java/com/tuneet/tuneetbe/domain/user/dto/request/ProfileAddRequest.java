@@ -1,6 +1,7 @@
 package com.tuneet.tuneetbe.domain.user.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -13,6 +14,7 @@ import lombok.NoArgsConstructor;
 public class ProfileAddRequest {
 
     @Schema(description = "닉네임", example = "test01")
+    @NotBlank(message = "닉네임은 필수 입력값입니다.")
     @Size(max = 50, message = "닉네임은 50자 이하여야 합니다.")
     private String nickname;
 
