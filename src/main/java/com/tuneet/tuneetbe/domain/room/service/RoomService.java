@@ -2,14 +2,15 @@ package com.tuneet.tuneetbe.domain.room.service;
 
 import com.tuneet.tuneetbe.domain.room.dto.request.RoomCreateRequest;
 import com.tuneet.tuneetbe.domain.room.dto.request.RoomEntryRequest;
-import com.tuneet.tuneetbe.domain.room.dto.response.RoomCreateResponse;
-import com.tuneet.tuneetbe.domain.room.dto.response.RoomEntryResponse;
-import com.tuneet.tuneetbe.domain.room.dto.response.RoomSummary;
-import com.tuneet.tuneetbe.domain.room.dto.response.RoomSummaryList;
+import com.tuneet.tuneetbe.domain.room.dto.response.*;
 import com.tuneet.tuneetbe.domain.room.entity.Room;
+import com.tuneet.tuneetbe.domain.room.entity.RoomPlaylist;
+import com.tuneet.tuneetbe.domain.room.entity.RoomPost;
 import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
 import com.tuneet.tuneetbe.domain.room.enums.RoomRole;
 import com.tuneet.tuneetbe.domain.room.exception.RoomErrorCode;
+import com.tuneet.tuneetbe.domain.room.repository.RoomPlaylistRepository;
+import com.tuneet.tuneetbe.domain.room.repository.RoomPostRepository;
 import com.tuneet.tuneetbe.domain.room.repository.RoomRepository;
 import com.tuneet.tuneetbe.domain.room.repository.RoomUserRepository;
 import com.tuneet.tuneetbe.domain.room.util.InviteCodeGenerator;
@@ -23,8 +24,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.net.Authenticator;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -39,6 +40,12 @@ public class RoomService {
 
     private final PasswordEncoder passwordEncoder;
     private final InviteCodeGenerator inviteCodeGenerator;
+    private final RoomPostRepository roomPostRepository;
+    private final RoomPlaylistRepository roomPlaylistRepository;
+
+    private static final Comparator<RoomUser> OWNER_FIRST =
+            Comparator.comparing((RoomUser ru) -> ru.getRole() != RoomRole.OWNER)
+                    .thenComparing(RoomUser::getId);
 
     // 방 생성
     @Transactional
@@ -135,6 +142,60 @@ public class RoomService {
         return response;
     }
 
+    // 방 홈 화면 조회
+    public RoomHomeResponse getRoomHome(Long roomId, Long userId){
+
+        // 방 찾기
+        Room room = roomRepository.findById(roomId).orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
+
+        // 모든 멤버 불러오기
+        List<RoomUser> roomUserList = roomUserRepository.findAllByRoomOrderByIdAsc(room);
+
+        // 내 역할(Role) 탐색
+        RoomUser myRoomUser = roomUserList.stream()
+                .filter(ru -> ru.getUser().getId().equals(userId))
+                .findFirst()
+                .orElseThrow(() -> new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
+
+        // 포스트 불러오기
+        List<RoomPost> roomPostList = roomPostRepository.findTop2ByRoomOrderByCreatedAtDescIdDesc(room);
+
+        // 플레이리스트 불러오기
+        List<RoomPlaylist> roomPlaylistList = roomPlaylistRepository.findTop2ByRoomOrderByPositionAsc(room);
+
+        return generateRoomHomeResponse(room, myRoomUser.getRole(), roomUserList, roomPostList, roomPlaylistList);
+
+    }
+
+    // 유저 목록 조회
+    public RoomUserListResponse getRoomUserList(Long roomId, Long userId){
+
+        // 방 찾기
+        Room room = roomRepository.findById(roomId).orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
+
+        // 모든 멤버 불러오기
+        List<RoomUser> roomUserList = roomUserRepository.findAllWithProfileMusicByRoomOrderByIdAsc(room);
+
+        // 내 역할(Role) 탐색
+        RoomUser myRoomUser = roomUserList.stream()
+                .filter(ru -> ru.getUser().getId().equals(userId))
+                .findFirst()
+                .orElseThrow(() -> new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
+
+        return RoomUserListResponse.builder()
+                .roomId(room.getId())
+                .roomTitle(room.getRoomTitle())
+                .roomDescription(room.getRoomDescription())
+                .roomUsers(roomUserList.stream()
+                        // 본인 제외
+                        .filter(ru -> ru != myRoomUser)
+                        .sorted(OWNER_FIRST)
+                        .map(RoomUserResponse::from)
+                        .toList())
+                .build();
+
+    }
+
     // 초대코드 생성
     private String generateInviteCode() {
         for (int i = 0; i < 5; i++) {
@@ -188,6 +249,32 @@ public class RoomService {
         if (!passwordEncoder.matches(rawPassword, room.getPassword())) {
             throw new CustomException(RoomErrorCode.ROOM_PASSWORD_MISMATCH);
         }
+    }
+
+    // 홈 화면 DTO 조립
+    private RoomHomeResponse generateRoomHomeResponse(
+            Room room,
+            RoomRole myRole,
+            List<RoomUser> roomUserList,
+            List<RoomPost> roomPostList,
+            List<RoomPlaylist> roomPlaylistList
+    ) {
+        return RoomHomeResponse.builder()
+                .roomId(room.getId())
+                .roomTitle(room.getRoomTitle())
+                .roomDescription(room.getRoomDescription())
+                .roomPicture(room.getRoomPicture())
+                .inviteCode(room.getInviteCode())
+                .hasPassword(room.getPassword() != null)
+                .myRole(myRole)
+                .memberCount(roomUserList.size())
+                .roomUsers(roomUserList.stream()
+                        .sorted(OWNER_FIRST)
+                        .map(RoomUserSummaryResponse::from)
+                        .toList())
+                .roomPosts(roomPostList.stream().map(RoomPostResponse::from).toList())
+                .roomPlaylists(roomPlaylistList.stream().map(RoomPlaylistResponse::from).toList())
+                .build();
     }
 
 }

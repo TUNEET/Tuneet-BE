@@ -2,9 +2,7 @@ package com.tuneet.tuneetbe.domain.room.controller;
 
 import com.tuneet.tuneetbe.domain.room.dto.request.RoomCreateRequest;
 import com.tuneet.tuneetbe.domain.room.dto.request.RoomEntryRequest;
-import com.tuneet.tuneetbe.domain.room.dto.response.RoomCreateResponse;
-import com.tuneet.tuneetbe.domain.room.dto.response.RoomEntryResponse;
-import com.tuneet.tuneetbe.domain.room.dto.response.RoomSummaryList;
+import com.tuneet.tuneetbe.domain.room.dto.response.*;
 import com.tuneet.tuneetbe.domain.room.service.RoomService;
 import com.tuneet.tuneetbe.global.common.BaseResponse;
 import com.tuneet.tuneetbe.global.security.CustomUserDetails;
@@ -64,5 +62,27 @@ public class RoomController {
         return ResponseEntity
                 .status(joined ? HttpStatus.OK : HttpStatus.CREATED)
                 .body(BaseResponse.success(joined ? 200 : 201, joined ? "이미 참여 중인 방" : "방 입장 성공", roomEntryResponse));
+    }
+
+    @Operation(summary = "방 홈 화면 조회", description = "방 정보, 내 역할, 멤버 목록, 최근 포스트 2개, 플레이리스트 앞 2곡을 한 번에 조회하는 API. 방 멤버만 조회할 수 있으며, 멤버가 아니면 R4004를 응답한다")
+    @GetMapping("/{room-id}")
+    public ResponseEntity<BaseResponse<RoomHomeResponse>> getRoomHome(@AuthenticationPrincipal CustomUserDetails customUserDetails,
+                                                                         @PathVariable("room-id") Long roomId) {
+        RoomHomeResponse roomHomeResponse = roomService.getRoomHome(roomId, customUserDetails.getUserId());
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(BaseResponse.success(200, "방 홈 화면 조회 성공", roomHomeResponse));
+    }
+
+    @Operation(summary = "방 멤버 목록 조회", description = "방 정보와 나를 제외한 멤버 목록을 조회하는 API. 방 멤버만 조회할 수 있으며, 멤버가 아니면 R4004를 응답한다")
+    @GetMapping("/{room-id}/users")
+    public ResponseEntity<BaseResponse<RoomUserListResponse>> getRoomUsers(@AuthenticationPrincipal CustomUserDetails customUserDetails,
+                                                                           @PathVariable("room-id") Long roomId) {
+        RoomUserListResponse roomUserListResponse = roomService.getRoomUserList(roomId, customUserDetails.getUserId());
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(BaseResponse.success(200, "방 유저 목록 조회 성공", roomUserListResponse));
     }
 }
