@@ -1,7 +1,9 @@
 package com.tuneet.tuneetbe.domain.room.service;
 
 import com.tuneet.tuneetbe.domain.room.dto.request.RoomCreateRequest;
+import com.tuneet.tuneetbe.domain.room.dto.request.RoomEntryRequest;
 import com.tuneet.tuneetbe.domain.room.dto.response.RoomCreateResponse;
+import com.tuneet.tuneetbe.domain.room.dto.response.RoomEntryResponse;
 import com.tuneet.tuneetbe.domain.room.dto.response.RoomSummary;
 import com.tuneet.tuneetbe.domain.room.dto.response.RoomSummaryList;
 import com.tuneet.tuneetbe.domain.room.entity.Room;
@@ -21,6 +23,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.Authenticator;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -94,6 +97,44 @@ public class RoomService {
 
     }
 
+    // 방 입장
+    @Transactional
+    public RoomEntryResponse entryRoom(RoomEntryRequest request, Long userId) {
+
+        // 방에 참여할 유저 찾기
+        User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 초대 코드 기반하여 참여할 방 찾기
+        Room room = roomRepository.findByInviteCode(request.getInviteCode()).orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
+
+        // 이미 참여한 방이라면 -> 이미 참여한 방 응답 돌려주기
+        if (roomUserRepository.existsByRoomIdAndUserId(room.getId(), userId)) {
+            return RoomEntryResponse.builder().roomId(room.getId()).alreadyJoined(true).build();
+        }
+
+        // 비밀번호 검사
+        validatePassword(room, request.getPassword());
+
+        // 참여 처리를 위한 RoomUser 객체 생성
+        RoomUser roomUser = RoomUser.builder()
+                .room(room)
+                .user(user)
+                .role(RoomRole.MEMBER)
+                .build();
+
+        // 참여 처리
+        roomUserRepository.save(roomUser);
+
+        log.info("[RoomService] 방 입장 성공: roomId = {}, userId = {}", room.getId(), userId);
+
+        RoomEntryResponse response = RoomEntryResponse.builder()
+                .roomId(room.getId())
+                .alreadyJoined(false)
+                .build();
+
+        return response;
+    }
+
     // 초대코드 생성
     private String generateInviteCode() {
         for (int i = 0; i < 5; i++) {
@@ -135,6 +176,18 @@ public class RoomService {
                 .roomTitle(room.getRoomTitle())
                 .roomDescription(room.getRoomDescription())
                 .build();
+    }
+
+    private void validatePassword(Room room, String rawPassword) {
+        if (room.getPassword() == null) {
+            return; // 공개 방
+        }
+        if (rawPassword == null) {
+            throw new CustomException(RoomErrorCode.ROOM_PASSWORD_REQUIRED);
+        }
+        if (!passwordEncoder.matches(rawPassword, room.getPassword())) {
+            throw new CustomException(RoomErrorCode.ROOM_PASSWORD_MISMATCH);
+        }
     }
 
 }

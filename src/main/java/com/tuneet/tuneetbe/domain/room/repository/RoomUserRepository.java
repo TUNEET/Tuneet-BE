@@ -23,4 +23,6 @@ public interface RoomUserRepository extends JpaRepository<RoomUser, Long> {
 
     @EntityGraph(attributePaths = "room")
     List<RoomUser> findAllByUserIdOrderByIdDesc(Long userId);
+
+    boolean existsByRoomIdAndUserId(Long roomId, Long userId);
 }
