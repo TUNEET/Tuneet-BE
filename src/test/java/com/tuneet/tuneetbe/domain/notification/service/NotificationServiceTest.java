@@ -31,6 +31,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
@@ -187,6 +188,22 @@ class NotificationServiceTest {
             assertThat(response.getNotifications()).isEmpty();
             assertThat(response.getHasNext()).isFalse();
             verify(feedMessageRepository, never()).findAllByIdIn(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("알림 전체 삭제")
+    class DeleteAllNotifications {
+
+        @Test
+        @DisplayName("내가 받은 알림을 모두 삭제하고 피드 메시지는 삭제하지 않는다")
+        void success() {
+            // when
+            notificationService.deleteNotifications(RECEIVER_ID);
+
+            // then
+            verify(notificationRepository).deleteAllByReceiverId(RECEIVER_ID);
+            verifyNoInteractions(feedMessageRepository);
         }
     }
 }

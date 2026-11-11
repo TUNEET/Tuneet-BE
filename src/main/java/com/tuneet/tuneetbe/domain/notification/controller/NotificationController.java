@@ -12,10 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
@@ -41,5 +38,18 @@ public class NotificationController {
 
         // 응답 반환
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "알림 목록 조회 성공", response));
+    }
+
+    // 알림 전체 삭제
+    @Operation(summary = "알림 전체 삭제", description = "사용자가 받은 알림을 모두 삭제하는 API")
+    @DeleteMapping("/notifications")
+    public ResponseEntity<BaseResponse<Void>> deleteAllNotifications(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+
+        // service 호출
+        notificationService.deleteNotifications(userDetails.getUserId());
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "알림 전체 삭제 성공", null));
     }
 }

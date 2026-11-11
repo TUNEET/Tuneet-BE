@@ -120,4 +120,15 @@ public class NotificationService {
                 .createdAt(notification.getCreatedAt())
                 .build();
     }
+
+    // 알림 전체 삭제
+    @Transactional
+    public void deleteNotifications(Long userId) {
+
+        // 알림 삭제
+        notificationRepository.deleteAllByReceiverId(userId);
+
+        // 로그 출력
+        log.info("[NotificationService] 알림 전체 삭제 성공: userId = {}", userId);
+    }
 }
