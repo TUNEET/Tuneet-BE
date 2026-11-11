@@ -1,9 +1,9 @@
 package com.tuneet.tuneetbe.domain.room.entity;
 
-import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.global.common.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -18,10 +18,6 @@ public class Room extends BaseTimeEntity {
     @Column(name = "room_id")
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user; // 방을 만든 사용자
-
     @Column(nullable = false)
     private String roomTitle; // 방 이름
 
@@ -33,4 +29,13 @@ public class Room extends BaseTimeEntity {
 
     @Column(nullable = false, unique = true)
     private String inviteCode; // 초대 코드
+
+    @Builder
+    private Room(String roomTitle, String roomPicture, String password, String roomDescription, String inviteCode) {
+        this.roomTitle = roomTitle;
+        this.roomPicture = roomPicture;
+        this.password = password;
+        this.roomDescription = roomDescription;
+        this.inviteCode = inviteCode;
+    }
 }
