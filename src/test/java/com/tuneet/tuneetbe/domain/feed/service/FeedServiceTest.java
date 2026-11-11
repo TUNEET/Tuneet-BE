@@ -383,6 +383,49 @@ class FeedServiceTest {
         }
 
         @Test
+        @DisplayName("피드에 달린 메시지의 알림을 삭제한 뒤 메시지와 피드를 삭제한다")
+        void deleteMessageNotifications() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            Feed feed = savedFeed(FEED_ID, me);
+            FeedMessage first = FeedMessage.builder().user(writer(OTHER_USER_ID, "산책하는 튜니", null)).feed(feed)
+                    .music(savedMusic()).messageContent("좋아요").build();
+            FeedMessage second = FeedMessage.builder().user(writer(OTHER_USER_ID, "산책하는 튜니", null)).feed(feed)
+                    .music(savedMusic()).messageContent("최고").build();
+            ReflectionTestUtils.setField(first, "id", 501L);
+            ReflectionTestUtils.setField(second, "id", 502L);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(me));
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.of(feed));
+            given(feedMessageRepository.findAllByFeedId(FEED_ID)).willReturn(List.of(first, second));
+
+            // when
+            feedService.deleteFeed(USER_ID, FEED_ID);
+
+            // then
+            InOrder inOrder = inOrder(notificationRepository, feedMessageRepository, feedRepository);
+            inOrder.verify(notificationRepository).deleteAllByTypeAndTargetIdIn(NotificationType.FEED_MESSAGE, List.of(501L, 502L));
+            inOrder.verify(feedMessageRepository).deleteAllByFeedId(FEED_ID);
+            inOrder.verify(feedRepository).deleteById(FEED_ID);
+        }
+
+        @Test
+        @DisplayName("메시지가 없는 피드는 알림 삭제를 하지 않는다")
+        void noMessages() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(me));
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.of(savedFeed(FEED_ID, me)));
+            given(feedMessageRepository.findAllByFeedId(FEED_ID)).willReturn(List.of());
+
+            // when
+            feedService.deleteFeed(USER_ID, FEED_ID);
+
+            // then
+            verify(notificationRepository, never()).deleteAllByTypeAndTargetIdIn(any(), any());
+            verify(feedRepository).deleteById(FEED_ID);
+        }
+
+        @Test
         @DisplayName("다른 사용자의 피드를 삭제하면 FEED_ACCESS_DENIED 예외가 발생하고 삭제하지 않는다")
         void otherUserFeed() {
             // given
