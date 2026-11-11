@@ -192,6 +192,15 @@ public class FeedService {
             throw new CustomException(FeedErrorCode.FEED_ACCESS_DENIED);
         }
 
+        // 피드에 달린 메시지의 알림 삭제 (메시지가 지워지면 알림창에 보여줄 내용이 없어지기 때문)
+        List<Long> messageIds = new ArrayList<>();
+        for (FeedMessage feedMessage : feedMessageRepository.findAllByFeedId(feedId)) {
+            messageIds.add(feedMessage.getId());
+        }
+        if (!messageIds.isEmpty()) {
+            notificationRepository.deleteAllByTypeAndTargetIdIn(NotificationType.FEED_MESSAGE, messageIds);
+        }
+
         // 피드 메시지 먼저 삭제
         feedMessageRepository.deleteAllByFeedId(feedId);
 
