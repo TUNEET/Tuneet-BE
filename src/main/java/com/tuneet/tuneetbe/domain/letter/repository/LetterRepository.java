@@ -11,8 +11,8 @@ import java.util.List;
 
 public interface LetterRepository extends JpaRepository<Letter, Long> {
 
-    // 보낸 사람이 기준 시각 이후에 보낸 편지 수
-    long countBySenderIdAndCreatedAtGreaterThanEqual(Long senderId, LocalDateTime from);
+    // 보낸 사람이 기준 시각 이후에 보낸 편지 수 (답장은 하루 제한에서 제외)
+    long countBySenderIdAndParentLetterIsNullAndCreatedAtGreaterThanEqual(Long senderId, LocalDateTime from);
 
     // 내가 받은 편지를 최신순으로 보낸 사람과 노래를 함께 조회
     @EntityGraph(attributePaths = {"sender", "music"})
@@ -25,4 +25,7 @@ public interface LetterRepository extends JpaRepository<Letter, Long> {
     // 내가 받고 아직 삭제하지 않은 편지 전체 조회
     // TODO: 추후 편지가 많아지면 Query 방식으로 변경하는 것이 좋을것 같음
     List<Letter> findAllByReceiverIdAndDeletedByReceiverFalse(Long receiverId);
+
+    // 이 편지에 이미 답장했는지 확인
+    boolean existsByParentLetterId(Long parentLetterId);
 }

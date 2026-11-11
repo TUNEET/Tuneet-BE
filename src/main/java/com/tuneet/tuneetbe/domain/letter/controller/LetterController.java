@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.letter.controller;
 
+import com.tuneet.tuneetbe.domain.letter.dto.request.LetterReplyRequest;
 import com.tuneet.tuneetbe.domain.letter.dto.request.LetterSendRequest;
 import com.tuneet.tuneetbe.domain.letter.dto.request.RandomLetterSendRequest;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterDetailResponse;
@@ -138,5 +139,23 @@ public class LetterController {
 
         // 응답 반환
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "오늘 남은 편지지 조회 성공", response));
+    }
+
+    // 편지 답장 보내기
+    @Operation(summary = "편지 답장 보내기", description = "받은 편지를 보낸 사람에게 답장을 보내는 API")
+    @PostMapping("/letters/{letter-id}/replies")
+    public ResponseEntity<BaseResponse<LetterSendResponse>> letterReply(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("letter-id") Long letterId,
+            @Valid @RequestBody LetterReplyRequest request) {
+
+        // 트랜잭션 밖에서 곡 확보
+        Music music = musicCatalogService.getOrCreateMusics(List.of(request.getMusicId())).get(0);
+
+        // service 호출
+        LetterSendResponse response = letterService.letterReply(userDetails.getUserId(), letterId, music, request.getLetterContent());
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(201, "답장 보내기 성공", response));
     }
 }
