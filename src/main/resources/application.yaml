@@ -36,6 +36,9 @@ cloud:
     s3:
       bucket: ${AWS_S3_BUCKET}
 
+firebase:
+  credentials: ${FIREBASE_CREDENTIALS:}
+
 music-api:
   base-url: ${MUSIC_API_BASE_URL}
   api-key: ${MUSIC_API_KEY}
