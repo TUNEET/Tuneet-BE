@@ -10,12 +10,15 @@ import com.tuneet.tuneetbe.domain.letter.exception.LetterErrorCode;
 import com.tuneet.tuneetbe.domain.letter.repository.LetterRepository;
 import com.tuneet.tuneetbe.domain.music.dto.response.MusicResponse;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
+import com.tuneet.tuneetbe.domain.notification.enums.NotificationType;
+import com.tuneet.tuneetbe.domain.notification.event.PushEvent;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
 import com.tuneet.tuneetbe.global.exception.CustomException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -39,6 +42,7 @@ public class LetterService {
 
     private final LetterRepository letterRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 지정 편지 발송
     @Transactional
@@ -86,6 +90,9 @@ public class LetterService {
                 .letterContent(letterContent)
                 .isRandom(false)
                 .build());
+
+        // 받는 사람에게 푸시 알림 (커밋 후 전송)
+        eventPublisher.publishEvent(new PushEvent(receiver.getId(), "새 편지가 도착했어요", sender.getNickname() + "님이 편지를 보냈어요", NotificationType.LETTER, letter.getId()));
 
         // 로그 출력
         log.info("[LetterService] 편지 발송 성공: letterId = {}", letter.getId());
@@ -151,6 +158,9 @@ public class LetterService {
                 .letterContent(letterContent)
                 .isRandom(true)
                 .build());
+
+        // 받는 사람에게 푸시 알림 (커밋 후 전송)
+        eventPublisher.publishEvent(new PushEvent(receiver.getId(), "새 편지가 도착했어요", sender.getNickname() + "님이 편지를 보냈어요", NotificationType.LETTER, letter.getId()));
 
         // 로그 출력
         log.info("[LetterService] 랜덤 편지 발송 성공: letterId = {}", letter.getId());
@@ -389,6 +399,9 @@ public class LetterService {
                 .isRandom(false)
                 .parentLetter(parentLetter)
                 .build());
+
+        // 받는 사람에게 푸시 알림 (커밋 후 전송)
+        eventPublisher.publishEvent(new PushEvent(receiver.getId(), "답장이 도착했어요", sender.getNickname() + "님이 답장을 보냈어요", NotificationType.LETTER, letter.getId()));
 
         // 로그 출력
         log.info("[LetterService] 답장 편지 발송 성공: letterId = {}", letter.getId());

@@ -75,13 +75,14 @@ jobs:
           AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
           MUSIC_API_BASE_URL: ${{ secrets.MUSIC_API_BASE_URL }}
           MUSIC_API_KEY: ${{ secrets.MUSIC_API_KEY }}
+          FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_CREDENTIALS }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: BACKEND_IMAGE,DB_PASSWORD,JWT_SECRET,AWS_ACCESS_KEY,AWS_SECRET_KEY,AWS_S3_BUCKET,MUSIC_API_BASE_URL,MUSIC_API_KEY,GHCR_USER,GHCR_TOKEN
+          envs: BACKEND_IMAGE,DB_PASSWORD,JWT_SECRET,AWS_ACCESS_KEY,AWS_SECRET_KEY,AWS_S3_BUCKET,MUSIC_API_BASE_URL,MUSIC_API_KEY,FIREBASE_CREDENTIALS,GHCR_USER,GHCR_TOKEN
           script_stop: true
           script: |
             cd ~/app
@@ -95,7 +96,8 @@ jobs:
               "AWS_SECRET_KEY=$AWS_SECRET_KEY" \
               "AWS_S3_BUCKET=$AWS_S3_BUCKET" \
               "MUSIC_API_BASE_URL=$MUSIC_API_BASE_URL" \
-              "MUSIC_API_KEY=$MUSIC_API_KEY" > .env
+              "MUSIC_API_KEY=$MUSIC_API_KEY" \
+              "FIREBASE_CREDENTIALS=$FIREBASE_CREDENTIALS" > .env
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose pull backend
             docker compose up -d --no-build

@@ -13,6 +13,7 @@ import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.notification.entity.Notification;
 import com.tuneet.tuneetbe.domain.notification.enums.NotificationType;
+import com.tuneet.tuneetbe.domain.notification.event.PushEvent;
 import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
@@ -28,6 +29,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.SliceImpl;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -64,6 +66,9 @@ class FeedServiceTest {
 
     @Mock
     private NotificationRepository notificationRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private FeedService feedService;
@@ -502,6 +507,12 @@ class FeedServiceTest {
             assertThat(notification.getType()).isEqualTo(NotificationType.FEED_MESSAGE);
             assertThat(notification.getTargetId()).isEqualTo(MESSAGE_ID);
             assertThat(notification.getIsRead()).isFalse();
+
+            ArgumentCaptor<PushEvent> eventCaptor = ArgumentCaptor.forClass(PushEvent.class);
+            verify(eventPublisher).publishEvent(eventCaptor.capture());
+            assertThat(eventCaptor.getValue().userId()).isEqualTo(OTHER_USER_ID);
+            assertThat(eventCaptor.getValue().type()).isEqualTo(NotificationType.FEED_MESSAGE);
+            assertThat(eventCaptor.getValue().targetId()).isEqualTo(FEED_ID);
 
             assertThat(response.getFeedMessageId()).isEqualTo(MESSAGE_ID);
             assertThat(response.getFeedId()).isEqualTo(FEED_ID);

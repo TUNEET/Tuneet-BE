@@ -5,6 +5,7 @@ import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.dto.response.GenreResponse;
 import com.tuneet.tuneetbe.domain.music.entity.Genre;
 import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
+import com.tuneet.tuneetbe.domain.notification.repository.DeviceTokenRepository;
 import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository;
 import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
 import com.tuneet.tuneetbe.domain.room.enums.RoomRole;
@@ -63,6 +64,7 @@ public class UserService {
     private final FeedRepository feedRepository;
     private final FeedMessageRepository feedMessageRepository;
     private final NotificationRepository notificationRepository;
+    private final DeviceTokenRepository deviceTokenRepository;
     private final RoomRepository roomRepository;
     private final RoomUserRepository roomUserRepository;
     private final RoomPostRepository roomPostRepository;
@@ -431,6 +433,9 @@ public class UserService {
 
         // 받은 알림 삭제
         notificationRepository.deleteAllByReceiverId(userId);
+
+        // 푸시 알림 기기 토큰 삭제
+        deviceTokenRepository.deleteAllByUserId(userId);
 
         // 방장인 방 처리
         handleOwnedRooms(userId);

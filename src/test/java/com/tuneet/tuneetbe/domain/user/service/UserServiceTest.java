@@ -5,6 +5,7 @@ import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.entity.Genre;
 import com.tuneet.tuneetbe.domain.music.enums.GenreType;
 import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
+import com.tuneet.tuneetbe.domain.notification.repository.DeviceTokenRepository;
 import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository;
 import com.tuneet.tuneetbe.domain.room.entity.Room;
 import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
@@ -100,6 +101,9 @@ class UserServiceTest {
 
     @Mock
     private NotificationRepository notificationRepository;
+
+    @Mock
+    private DeviceTokenRepository deviceTokenRepository;
 
     @Mock
     private RoomRepository roomRepository;
@@ -312,6 +316,7 @@ class UserServiceTest {
             verify(userPlatformRepository).deleteAllByUserId(USER_ID);
             verify(userBlockRepository).deleteAllByBlockerIdOrBlockedId(USER_ID, USER_ID);
             verify(notificationRepository).deleteAllByReceiverId(USER_ID);
+            verify(deviceTokenRepository).deleteAllByUserId(USER_ID);
             verify(roomUserRepository).deleteAllByUserId(USER_ID);
         }
 
