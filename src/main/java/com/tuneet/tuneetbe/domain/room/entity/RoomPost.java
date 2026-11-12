@@ -4,6 +4,7 @@ import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
@@ -41,4 +42,12 @@ public class RoomPost {
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt; // 작성 일시
+
+    @Builder
+    private RoomPost(Room room, User user, Music music, String roomPostContent) {
+        this.room = room;
+        this.user = user;
+        this.music = music;
+        this.roomPostContent = roomPostContent;
+    }
 }

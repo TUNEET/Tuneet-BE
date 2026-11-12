@@ -521,6 +521,7 @@ class RoomServiceTest {
                 assertThat(post.getContent()).isEqualTo("요즘 계속 듣는 노래");
                 assertThat(post.getMusic().getMusicId()).isEqualTo(7L);
                 assertThat(post.getMusic().getTitle()).isEqualTo("Hype Boy");
+                assertThat(post.getIsMine()).isFalse();
             });
             assertThat(response.getRoomPlaylists()).singleElement().satisfies(item -> {
                 assertThat(item.getRoomPlaylistId()).isEqualTo(30L);

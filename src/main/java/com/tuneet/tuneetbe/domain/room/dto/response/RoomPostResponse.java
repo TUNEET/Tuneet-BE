@@ -23,6 +23,9 @@ public class RoomPostResponse {
     @Schema(description = "작성자 닉네임", example = "튜닛")
     private String nickname;
 
+    @Schema(description = "작성자 프로필 사진 URL", example = "https://.../profile/abc.png", nullable = true)
+    private String profilePicture;
+
     @Schema(description = "포스트한 노래")
     private MusicResponse music;
 
@@ -32,13 +35,18 @@ public class RoomPostResponse {
     @Schema(description = "작성 일시 ('n분 전' 표시는 프론트에서 계산)", example = "2026-11-12T14:20:00")
     private LocalDateTime createdAt;
 
-    public static RoomPostResponse from(RoomPost roomPost) {
+    @Schema(description = "내가 작성한 포스트인지 여부 (삭제 버튼 표시용)", example = "true")
+    private Boolean isMine;
+
+    public static RoomPostResponse from(RoomPost roomPost, Long userId) {
         return RoomPostResponse.builder()
                 .roomPostId(roomPost.getId())
                 .nickname(roomPost.getUser().getNickname())
+                .profilePicture(roomPost.getUser().getProfilePicture())
                 .music(MusicResponse.from(roomPost.getMusic()))
                 .content(roomPost.getRoomPostContent())
                 .createdAt(roomPost.getCreatedAt())
+                .isMine(roomPost.getUser().getId().equals(userId))
                 .build();
     }
 }
