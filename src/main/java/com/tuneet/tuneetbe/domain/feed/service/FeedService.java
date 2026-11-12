@@ -10,6 +10,7 @@ import com.tuneet.tuneetbe.domain.music.dto.response.MusicResponse;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.notification.entity.Notification;
 import com.tuneet.tuneetbe.domain.notification.enums.NotificationType;
+import com.tuneet.tuneetbe.domain.notification.event.PushEvent;
 import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
@@ -17,6 +18,7 @@ import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
 import com.tuneet.tuneetbe.global.exception.CustomException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -36,6 +38,7 @@ public class FeedService {
     private final UserRepository userRepository;
     private final FeedMessageRepository feedMessageRepository;
     private final NotificationRepository notificationRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 피드 작성
     @Transactional
@@ -244,6 +247,9 @@ public class FeedService {
                 .type(NotificationType.FEED_MESSAGE)
                 .targetId(feedMessage.getId())
                 .build());
+
+        // 피드 작성자에게 푸시 알림 (커밋 후 전송, 알림을 누르면 피드 상세로 이동)
+        eventPublisher.publishEvent(new PushEvent(feed.getUser().getId(), "내 피드에 메시지가 왔어요", user.getNickname() + "님이 메시지를 보냈어요", NotificationType.FEED_MESSAGE, feed.getId()));
 
         // 로그 출력
         log.info("[FeedService] 피드 메시지 작성 성공: feedMessageId = {}", feedMessage.getId());

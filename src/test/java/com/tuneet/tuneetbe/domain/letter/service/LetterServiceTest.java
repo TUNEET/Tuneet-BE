@@ -9,6 +9,8 @@ import com.tuneet.tuneetbe.domain.letter.entity.Letter;
 import com.tuneet.tuneetbe.domain.letter.exception.LetterErrorCode;
 import com.tuneet.tuneetbe.domain.letter.repository.LetterRepository;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
+import com.tuneet.tuneetbe.domain.notification.enums.NotificationType;
+import com.tuneet.tuneetbe.domain.notification.event.PushEvent;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
@@ -22,6 +24,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.SliceImpl;
@@ -54,6 +57,9 @@ class LetterServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private LetterService letterService;
@@ -127,6 +133,12 @@ class LetterServiceTest {
             assertThat(response.getReceiverNickname()).isEqualTo("원이");
             assertThat(response.getMusic().getTitle()).isEqualTo("Pretty Girl");
             assertThat(response.getLetterContent()).isEqualTo(CONTENT);
+
+            ArgumentCaptor<PushEvent> eventCaptor = ArgumentCaptor.forClass(PushEvent.class);
+            verify(eventPublisher).publishEvent(eventCaptor.capture());
+            assertThat(eventCaptor.getValue().userId()).isEqualTo(RECEIVER_ID);
+            assertThat(eventCaptor.getValue().type()).isEqualTo(NotificationType.LETTER);
+            assertThat(eventCaptor.getValue().targetId()).isEqualTo(LETTER_ID);
         }
 
         @Test
@@ -240,6 +252,12 @@ class LetterServiceTest {
             assertThat(captor.getValue().getSender()).isEqualTo(sender);
             assertThat(captor.getValue().getReceiver()).isEqualTo(receiver);
             assertThat(captor.getValue().getIsRandom()).isTrue();
+
+            ArgumentCaptor<PushEvent> eventCaptor = ArgumentCaptor.forClass(PushEvent.class);
+            verify(eventPublisher).publishEvent(eventCaptor.capture());
+            assertThat(eventCaptor.getValue().userId()).isEqualTo(RECEIVER_ID);
+            assertThat(eventCaptor.getValue().type()).isEqualTo(NotificationType.LETTER);
+            assertThat(eventCaptor.getValue().targetId()).isEqualTo(LETTER_ID);
 
             assertThat(response.getLetterId()).isEqualTo(LETTER_ID);
             assertThat(response.getSenderNickname()).isEqualTo("튜니");
@@ -715,6 +733,13 @@ class LetterServiceTest {
             assertThat(response.getSenderNickname()).isEqualTo("원이");
             assertThat(response.getReceiverNickname()).isEqualTo("튜니");
             verify(letterRepository, never()).countBySenderIdAndParentLetterIsNullAndCreatedAtGreaterThanEqual(any(), any());
+
+            ArgumentCaptor<PushEvent> eventCaptor = ArgumentCaptor.forClass(PushEvent.class);
+            verify(eventPublisher).publishEvent(eventCaptor.capture());
+            assertThat(eventCaptor.getValue().userId()).isEqualTo(SENDER_ID);
+            assertThat(eventCaptor.getValue().title()).isEqualTo("답장이 도착했어요");
+            assertThat(eventCaptor.getValue().type()).isEqualTo(NotificationType.LETTER);
+            assertThat(eventCaptor.getValue().targetId()).isEqualTo(LETTER_ID);
         }
 
         @Test
