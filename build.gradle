@@ -50,6 +50,9 @@ dependencies {
     // AWS S3
     implementation platform('software.amazon.awssdk:bom:2.31.0')
     implementation 'software.amazon.awssdk:s3'
+
+    // Firebase (FCM 푸시 알림)
+    implementation 'com.google.firebase:firebase-admin:9.9.0'
 }
 
 tasks.named('test') {
