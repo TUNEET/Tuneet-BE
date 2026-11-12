@@ -163,7 +163,7 @@ public class RoomService {
         // 플레이리스트 불러오기
         List<RoomPlaylist> roomPlaylistList = roomPlaylistRepository.findTop2ByRoomOrderByPositionAsc(room);
 
-        return generateRoomHomeResponse(room, myRoomUser.getRole(), roomUserList, roomPostList, roomPlaylistList);
+        return generateRoomHomeResponse(room, myRoomUser.getRole(), roomUserList, roomPostList, roomPlaylistList, userId);
 
     }
 
@@ -257,7 +257,8 @@ public class RoomService {
             RoomRole myRole,
             List<RoomUser> roomUserList,
             List<RoomPost> roomPostList,
-            List<RoomPlaylist> roomPlaylistList
+            List<RoomPlaylist> roomPlaylistList,
+            Long userId
     ) {
         return RoomHomeResponse.builder()
                 .roomId(room.getId())
@@ -272,7 +273,7 @@ public class RoomService {
                         .sorted(OWNER_FIRST)
                         .map(RoomUserSummaryResponse::from)
                         .toList())
-                .roomPosts(roomPostList.stream().map(RoomPostResponse::from).toList())
+                .roomPosts(roomPostList.stream().map(roomPost -> RoomPostResponse.from(roomPost, userId)).toList())
                 .roomPlaylists(roomPlaylistList.stream().map(RoomPlaylistResponse::from).toList())
                 .build();
     }
