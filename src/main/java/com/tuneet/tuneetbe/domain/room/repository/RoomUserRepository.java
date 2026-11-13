@@ -32,4 +32,7 @@ public interface RoomUserRepository extends JpaRepository<RoomUser, Long> {
 
     @EntityGraph(attributePaths = {"user", "user.profileMusic"})
     List<RoomUser> findAllWithProfileMusicByRoomOrderByIdAsc(Room room);
+
+    // 특정 방에서의 유저 역할 탐색
+    Optional<RoomUser> findByRoomIdAndUserId(Long roomId, Long userId);
 }
