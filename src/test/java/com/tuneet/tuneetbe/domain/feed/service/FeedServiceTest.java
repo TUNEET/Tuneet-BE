@@ -5,6 +5,7 @@ import com.tuneet.tuneetbe.domain.feed.dto.response.FeedDetailResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedListResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedSendMessageResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedUpdateResponse;
+import com.tuneet.tuneetbe.domain.feed.dto.response.SentFeedMessageListResponse;
 import com.tuneet.tuneetbe.domain.feed.entity.Feed;
 import com.tuneet.tuneetbe.domain.feed.entity.FeedMessage;
 import com.tuneet.tuneetbe.domain.feed.exception.FeedErrorCode;
@@ -555,6 +556,120 @@ class FeedServiceTest {
 
             verify(feedMessageRepository, never()).save(any());
             verify(notificationRepository, never()).save(any());
+        }
+    }
+
+    private FeedMessage sentMessage(Long id, User sender, Feed feed) {
+        FeedMessage message = FeedMessage.builder()
+                .user(sender)
+                .feed(feed)
+                .music(newMusic())
+                .messageContent("이 노래도 좋아하실 것 같아요!")
+                .build();
+        ReflectionTestUtils.setField(message, "id", id);
+        return message;
+    }
+
+    @Nested
+    @DisplayName("보낸 코멘트 리스트 보기")
+    class GetSentMessages {
+
+        private static final int SIZE = 2;
+        private final PageRequest pageable = PageRequest.of(0, SIZE);
+
+        @Test
+        @DisplayName("커서가 없으면 내가 보낸 최신 메시지부터 받은 사람(피드 작성자)과 함께 조회한다")
+        void firstPage() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            Feed walkFeed = savedFeed(FEED_ID, writer(OTHER_USER_ID, "산책하는 튜니", null));
+            Feed coffeeFeed = savedFeed(200L, writer(3L, "커피 마시는 튜니", null));
+            FeedMessage recent = sentMessage(501L, me, walkFeed);
+            FeedMessage old = sentMessage(500L, me, coffeeFeed);
+            given(feedMessageRepository.findByUserIdAndDeletedBySenderFalseOrderByIdDesc(USER_ID, pageable))
+                    .willReturn(new SliceImpl<>(List.of(recent, old), pageable, true));
+
+            // when
+            SentFeedMessageListResponse response = feedService.getSentMessages(USER_ID, null, SIZE);
+
+            // then
+            assertThat(response.getMessages()).extracting("feedMessageId").containsExactly(501L, 500L);
+            assertThat(response.getMessages()).extracting("feedId").containsExactly(FEED_ID, 200L);
+            assertThat(response.getMessages()).extracting("receiverNickname").containsExactly("산책하는 튜니", "커피 마시는 튜니");
+            assertThat(response.getMessages().get(0).getMusic().getTitle()).isEqualTo("I GOT YOU");
+            assertThat(response.getHasNext()).isTrue();
+            verify(feedMessageRepository, never())
+                    .findByUserIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("커서가 있으면 커서보다 이전 메시지를 조회한다")
+        void nextPage() {
+            // given
+            FeedMessage message = sentMessage(499L, writer(USER_ID, "튜니", null), savedFeed(FEED_ID, writer(OTHER_USER_ID, "산책하는 튜니", null)));
+            given(feedMessageRepository.findByUserIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(USER_ID, 500L, pageable))
+                    .willReturn(new SliceImpl<>(List.of(message), pageable, false));
+
+            // when
+            SentFeedMessageListResponse response = feedService.getSentMessages(USER_ID, 500L, SIZE);
+
+            // then
+            assertThat(response.getMessages()).extracting("feedMessageId").containsExactly(499L);
+            assertThat(response.getHasNext()).isFalse();
+            verify(feedMessageRepository, never()).findByUserIdAndDeletedBySenderFalseOrderByIdDesc(any(), any());
+        }
+
+        @Test
+        @DisplayName("보낸 메시지가 없으면 빈 목록과 hasNext false를 반환한다")
+        void empty() {
+            // given
+            given(feedMessageRepository.findByUserIdAndDeletedBySenderFalseOrderByIdDesc(USER_ID, pageable))
+                    .willReturn(new SliceImpl<>(List.of(), pageable, false));
+
+            // when
+            SentFeedMessageListResponse response = feedService.getSentMessages(USER_ID, null, SIZE);
+
+            // then
+            assertThat(response.getMessages()).isEmpty();
+            assertThat(response.getHasNext()).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("보낸 코멘트 전체 삭제")
+    class DeleteAllSentMessages {
+
+        @Test
+        @DisplayName("내가 보낸 메시지를 보낸 목록에서만 삭제하고 메시지와 알림은 지우지 않는다")
+        void success() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            Feed feed = savedFeed(FEED_ID, writer(OTHER_USER_ID, "산책하는 튜니", null));
+            FeedMessage first = sentMessage(500L, me, feed);
+            FeedMessage second = sentMessage(501L, me, feed);
+            given(feedMessageRepository.findAllByUserIdAndDeletedBySenderFalse(USER_ID)).willReturn(List.of(first, second));
+
+            // when
+            feedService.deleteAllSentMessages(USER_ID);
+
+            // then
+            assertThat(first.getDeletedBySender()).isTrue();
+            assertThat(second.getDeletedBySender()).isTrue();
+            verify(feedMessageRepository, never()).deleteAll(any());
+            verify(notificationRepository, never()).deleteAllByTypeAndTargetIdIn(any(), any());
+        }
+
+        @Test
+        @DisplayName("삭제할 메시지가 없어도 예외 없이 끝난다")
+        void empty() {
+            // given
+            given(feedMessageRepository.findAllByUserIdAndDeletedBySenderFalse(USER_ID)).willReturn(List.of());
+
+            // when
+            feedService.deleteAllSentMessages(USER_ID);
+
+            // then
+            verify(feedMessageRepository).findAllByUserIdAndDeletedBySenderFalse(USER_ID);
         }
     }
 }

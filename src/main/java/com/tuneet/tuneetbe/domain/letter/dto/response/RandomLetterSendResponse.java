@@ -25,6 +25,9 @@ public class RandomLetterSendResponse {
     @Schema(description = "편지에서 보낸 노래")
     private MusicResponse music;
 
+    @Schema(description = "랜덤으로 선택된 받는 사람 닉네임", example = "원이")
+    private String receiverNickname;
+
     @Schema(description = "편지 내용", example = "이 노래 너무 좋아요!")
     private String letterContent;
 

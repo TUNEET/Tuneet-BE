@@ -270,4 +270,73 @@ public class FeedService {
                 .createdAt(feedMessage.getCreatedAt())
                 .build();
     }
+
+    // 보낸 코멘트 리스트 보기
+    public SentFeedMessageListResponse getSentMessages(Long userId, Long cursor, int size) {
+
+        Pageable pageable = PageRequest.of(0, size);
+        Slice<FeedMessage> feedMessages;
+
+        // 커서가 없으면 내가 보낸 최신 메시지부터 조회
+        if (cursor == null) {
+            feedMessages = feedMessageRepository.findByUserIdAndDeletedBySenderFalseOrderByIdDesc(userId, pageable);
+        }
+
+        // 커서가 있으면 커서보다 이전 메시지 조회
+        else {
+            feedMessages = feedMessageRepository.findByUserIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(userId, cursor, pageable);
+        }
+
+        // 응답 목록 세팅
+        List<SentFeedMessageResponse> messageResponses = new ArrayList<>();
+        for (FeedMessage feedMessage : feedMessages.getContent()) {
+            messageResponses.add(toSentFeedMessageResponse(feedMessage));
+        }
+
+        // 응답 반환
+        return SentFeedMessageListResponse.builder()
+                .messages(messageResponses)
+                .hasNext(feedMessages.hasNext())
+                .build();
+    }
+
+    // 보낸 메시지 엔티티를 응답 dto로 변환
+    private SentFeedMessageResponse toSentFeedMessageResponse(FeedMessage feedMessage) {
+
+        Feed feed = feedMessage.getFeed(); // 메시지를 보낸 피드
+        User receiver = feed.getUser(); // 받은 사람 (피드 작성자)
+        Music music = feedMessage.getMusic(); // 메시지와 함께 보낸 노래
+
+        // 피드 작성자가 탈퇴하면 피드와 메시지가 함께 삭제되기 때문에 탈퇴한 사용자 처리는 하지 않음
+        return SentFeedMessageResponse.builder()
+                .feedMessageId(feedMessage.getId())
+                .feedId(feed.getId())
+                .receiverId(receiver.getId())
+                .receiverNickname(receiver.getNickname())
+                .music(MusicResponse.builder()
+                        .musicId(music.getId())
+                        .title(music.getTitle())
+                        .artist(music.getArtist())
+                        .musicPicture(music.getMusicPicture())
+                        .build())
+                .messageContent(feedMessage.getMessageContent())
+                .createdAt(feedMessage.getCreatedAt())
+                .build();
+    }
+
+    // 보낸 코멘트 전체 삭제
+    @Transactional
+    public void deleteAllSentMessages(Long userId) {
+
+        // 내가 보내고 아직 보낸 목록에서 삭제하지 않은 메시지 조회
+        List<FeedMessage> feedMessages = feedMessageRepository.findAllByUserIdAndDeletedBySenderFalse(userId);
+
+        // 하나씩 보낸 목록에서 삭제 처리 (받은 사람의 알림에는 그대로 남음)
+        for (FeedMessage feedMessage : feedMessages) {
+            feedMessage.deleteBySender();
+        }
+
+        // 로그 출력
+        log.info("[FeedService] 보낸 코멘트 전체 삭제 성공: userId = {}, count = {}", userId, feedMessages.size());
+    }
 }

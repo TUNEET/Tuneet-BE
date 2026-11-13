@@ -5,6 +5,8 @@ import com.tuneet.tuneetbe.domain.letter.dto.response.LetterListResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterRemainingResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterSendResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.RandomLetterSendResponse;
+import com.tuneet.tuneetbe.domain.letter.dto.response.SentLetterListResponse;
+import com.tuneet.tuneetbe.domain.letter.dto.response.SentLetterResponse;
 import com.tuneet.tuneetbe.domain.letter.entity.Letter;
 import com.tuneet.tuneetbe.domain.letter.exception.LetterErrorCode;
 import com.tuneet.tuneetbe.domain.letter.repository.LetterRepository;
@@ -165,7 +167,7 @@ public class LetterService {
         // 로그 출력
         log.info("[LetterService] 랜덤 편지 발송 성공: letterId = {}", letter.getId());
 
-        // 응답 반환 (받는 사람은 숨김)
+        // 응답 반환 (받는 사람 선택만 랜덤이고, 보낸 사람은 누가 받았는지 알 수 있음)
         return RandomLetterSendResponse.builder()
                 .letterId(letter.getId())
                 .senderNickname(sender.getNickname())
@@ -175,6 +177,7 @@ public class LetterService {
                         .artist(music.getArtist())
                         .musicPicture(music.getMusicPicture())
                         .build())
+                .receiverNickname(receiver.getNickname()) // 발송 결과 화면에서 받는 사람 표시
                 .letterContent(letter.getLetterContent())
                 .createdAt(letter.getCreatedAt())
                 .build();
@@ -420,5 +423,82 @@ public class LetterService {
                 .receiverNickname(receiver.getNickname())
                 .createdAt(letter.getCreatedAt())
                 .build();
+    }
+
+    // 보낸 편지 리스트 보기
+    public SentLetterListResponse sentLetterList(Long userId, Long cursor, int size) {
+
+        Pageable pageable = PageRequest.of(0, size);
+        Slice<Letter> letters;
+
+        // 커서가 없으면 내가 보낸 최신 편지부터 조회
+        if (cursor == null) {
+            letters = letterRepository.findBySenderIdAndDeletedBySenderFalseOrderByIdDesc(userId, pageable);
+        }
+
+        // 커서가 있으면 커서보다 이전 편지 조회
+        else {
+            letters = letterRepository.findBySenderIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(userId, cursor, pageable);
+        }
+
+        // 응답 목록 세팅
+        List<SentLetterResponse> letterResponses = new ArrayList<>();
+        for (Letter letter : letters.getContent()) {
+            letterResponses.add(toSentLetterResponse(letter));
+        }
+
+        // 응답 반환
+        return SentLetterListResponse.builder()
+                .letters(letterResponses)
+                .hasNext(letters.hasNext())
+                .build();
+    }
+
+    // 보낸 편지 엔티티를 응답 dto로 변환
+    private SentLetterResponse toSentLetterResponse(Letter letter) {
+
+        User receiver = letter.getReceiver(); // 받는 사람
+        Music music = letter.getMusic(); // 편지에 담긴 노래
+
+        // 받는 사람이 탈퇴했으면 "탈퇴한 사용자"로 표시 (랜덤 편지도 받는 사람 공개)
+        String receiverNickname;
+        if (receiver.isDeleted()) {
+            receiverNickname = DELETED_USER_NICKNAME;
+        }
+        else {
+            receiverNickname = receiver.getNickname();
+        }
+
+        return SentLetterResponse.builder()
+                .letterId(letter.getId())
+                .receiverId(receiver.getId())
+                .receiverNickname(receiverNickname)
+                .music(MusicResponse.builder()
+                        .musicId(music.getId())
+                        .title(music.getTitle())
+                        .artist(music.getArtist())
+                        .musicPicture(music.getMusicPicture())
+                        .build())
+                .letterContent(letter.getLetterContent())
+                .isRandom(letter.getIsRandom())
+                .isReply(letter.getParentLetter() != null)
+                .createdAt(letter.getCreatedAt())
+                .build();
+    }
+
+    // 보낸 편지 전체 삭제
+    @Transactional
+    public void deleteAllSentLetters(Long userId) {
+
+        // 내가 보내고 아직 보낸 목록에서 삭제하지 않은 편지 조회
+        List<Letter> letters = letterRepository.findAllBySenderIdAndDeletedBySenderFalse(userId);
+
+        // 하나씩 보낸 목록에서 삭제 처리 (받은 사람의 편지함에는 그대로 남음)
+        for (Letter letter : letters) {
+            letter.deleteBySender();
+        }
+
+        // 로그 출력
+        log.info("[LetterService] 보낸 편지 전체 삭제 성공: userId = {}, count = {}", userId, letters.size());
     }
 }

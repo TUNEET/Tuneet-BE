@@ -45,6 +45,9 @@ public class Letter {
     @Column(nullable = false)
     private Boolean deletedByReceiver = false; // 수신자 삭제 여부
 
+    @Column(nullable = false)
+    private Boolean deletedBySender = false; // 발신자 삭제 여부 (보낸 목록에서만 숨김)
+
     private LocalDateTime readAt; // 읽은 일시
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -75,5 +78,10 @@ public class Letter {
     // 받는 사람의 편지함에서 삭제 처리
     public void deleteByReceiver() {
         this.deletedByReceiver = true;
+    }
+
+    // 보낸 사람의 보낸 목록에서 삭제 처리 (받은 사람의 편지함에는 그대로 남음)
+    public void deleteBySender() {
+        this.deletedBySender = true;
     }
 }

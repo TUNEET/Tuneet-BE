@@ -28,4 +28,15 @@ public interface LetterRepository extends JpaRepository<Letter, Long> {
 
     // 이 편지에 이미 답장했는지 확인
     boolean existsByParentLetterId(Long parentLetterId);
+
+    // 내가 보낸 편지를 최신순으로 받는 사람과 노래를 함께 조회
+    @EntityGraph(attributePaths = {"receiver", "music"})
+    Slice<Letter> findBySenderIdAndDeletedBySenderFalseOrderByIdDesc(Long senderId, Pageable pageable);
+
+    // 내가 보낸 편지 중 커서보다 이전 편지를 받는 사람과 노래를 함께 조회
+    @EntityGraph(attributePaths = {"receiver", "music"})
+    Slice<Letter> findBySenderIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(Long senderId, Long cursor, Pageable pageable);
+
+    // 내가 보내고 아직 보낸 목록에서 삭제하지 않은 편지 전체 조회
+    List<Letter> findAllBySenderIdAndDeletedBySenderFalse(Long senderId);
 }
