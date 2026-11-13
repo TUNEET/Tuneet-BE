@@ -10,10 +10,8 @@ import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository
 import com.tuneet.tuneetbe.domain.room.entity.Room;
 import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
 import com.tuneet.tuneetbe.domain.room.enums.RoomRole;
-import com.tuneet.tuneetbe.domain.room.repository.RoomPlaylistRepository;
-import com.tuneet.tuneetbe.domain.room.repository.RoomPostRepository;
-import com.tuneet.tuneetbe.domain.room.repository.RoomRepository;
 import com.tuneet.tuneetbe.domain.room.repository.RoomUserRepository;
+import com.tuneet.tuneetbe.domain.room.service.RoomRemover;
 import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SettingsUpdateRequest;
@@ -106,16 +104,10 @@ class UserServiceTest {
     private DeviceTokenRepository deviceTokenRepository;
 
     @Mock
-    private RoomRepository roomRepository;
-
-    @Mock
     private RoomUserRepository roomUserRepository;
 
     @Mock
-    private RoomPostRepository roomPostRepository;
-
-    @Mock
-    private RoomPlaylistRepository roomPlaylistRepository;
+    private RoomRemover roomRemover;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -317,61 +309,23 @@ class UserServiceTest {
             verify(userBlockRepository).deleteAllByBlockerIdOrBlockedId(USER_ID, USER_ID);
             verify(notificationRepository).deleteAllByReceiverId(USER_ID);
             verify(deviceTokenRepository).deleteAllByUserId(USER_ID);
-            verify(roomUserRepository).deleteAllByUserId(USER_ID);
         }
 
         @Test
-        @DisplayName("방장이고 다른 멤버가 있으면 가장 먼저 참여한 멤버에게 위임하고 방을 유지한다")
-        void delegateOwner() {
+        @DisplayName("참여 중인 방을 모두 나간다")
+        void leaveRooms() {
             // given
-            RoomUser nextOwner = roomUser(RoomRole.MEMBER);
+            RoomUser ownerRoom = roomUser(RoomRole.OWNER);
+            RoomUser memberRoom = roomUser(RoomRole.MEMBER);
             given(userRepository.findById(USER_ID)).willReturn(Optional.of(deletableUser()));
-            given(roomUserRepository.findAllByUserId(USER_ID)).willReturn(List.of(roomUser(RoomRole.OWNER)));
-            given(roomUserRepository.findFirstByRoomIdAndUserIdNotOrderByIdAsc(ROOM_ID, USER_ID))
-                    .willReturn(Optional.of(nextOwner));
+            given(roomUserRepository.findAllByUserId(USER_ID)).willReturn(List.of(ownerRoom, memberRoom));
 
             // when
             userService.deleteUser(USER_ID);
 
             // then
-            assertThat(nextOwner.getRole()).isEqualTo(RoomRole.OWNER);
-            verify(roomRepository, never()).deleteById(any());
-        }
-
-        @Test
-        @DisplayName("방장이고 다른 멤버가 없으면 방의 자식 데이터부터 삭제하고 방을 삭제한다")
-        void deleteEmptyRoom() {
-            // given
-            given(userRepository.findById(USER_ID)).willReturn(Optional.of(deletableUser()));
-            given(roomUserRepository.findAllByUserId(USER_ID)).willReturn(List.of(roomUser(RoomRole.OWNER)));
-            given(roomUserRepository.findFirstByRoomIdAndUserIdNotOrderByIdAsc(ROOM_ID, USER_ID))
-                    .willReturn(Optional.empty());
-
-            // when
-            userService.deleteUser(USER_ID);
-
-            // then
-            InOrder inOrder = inOrder(roomPostRepository, roomPlaylistRepository, roomUserRepository, roomRepository);
-            inOrder.verify(roomPostRepository).deleteAllByRoomId(ROOM_ID);
-            inOrder.verify(roomPlaylistRepository).deleteAllByRoomId(ROOM_ID);
-            inOrder.verify(roomUserRepository).deleteAllByRoomId(ROOM_ID);
-            inOrder.verify(roomRepository).deleteById(ROOM_ID);
-        }
-
-        @Test
-        @DisplayName("방장이 아니면 위임하지 않고 멤버 정보만 삭제한다")
-        void memberOnly() {
-            // given
-            given(userRepository.findById(USER_ID)).willReturn(Optional.of(deletableUser()));
-            given(roomUserRepository.findAllByUserId(USER_ID)).willReturn(List.of(roomUser(RoomRole.MEMBER)));
-
-            // when
-            userService.deleteUser(USER_ID);
-
-            // then
-            verify(roomUserRepository, never()).findFirstByRoomIdAndUserIdNotOrderByIdAsc(anyLong(), anyLong());
-            verify(roomRepository, never()).deleteById(any());
-            verify(roomUserRepository).deleteAllByUserId(USER_ID);
+            verify(roomRemover).leaveRoom(ownerRoom);
+            verify(roomRemover).leaveRoom(memberRoom);
         }
 
         @Test

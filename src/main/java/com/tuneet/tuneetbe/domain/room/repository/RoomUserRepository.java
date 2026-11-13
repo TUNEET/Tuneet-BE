@@ -19,9 +19,6 @@ public interface RoomUserRepository extends JpaRepository<RoomUser, Long> {
     // 방의 멤버 정보 전체 삭제
     void deleteAllByRoomId(Long roomId);
 
-    // 사용자의 방 멤버 정보 전체 삭제
-    void deleteAllByUserId(Long userId);
-
     @EntityGraph(attributePaths = "room")
     List<RoomUser> findAllByUserIdOrderByIdDesc(Long userId);
 

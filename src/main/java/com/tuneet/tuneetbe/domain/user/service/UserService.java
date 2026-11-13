@@ -8,11 +8,8 @@ import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
 import com.tuneet.tuneetbe.domain.notification.repository.DeviceTokenRepository;
 import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository;
 import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
-import com.tuneet.tuneetbe.domain.room.enums.RoomRole;
-import com.tuneet.tuneetbe.domain.room.repository.RoomPlaylistRepository;
-import com.tuneet.tuneetbe.domain.room.repository.RoomPostRepository;
-import com.tuneet.tuneetbe.domain.room.repository.RoomRepository;
 import com.tuneet.tuneetbe.domain.room.repository.RoomUserRepository;
+import com.tuneet.tuneetbe.domain.room.service.RoomRemover;
 import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SettingsUpdateRequest;
@@ -45,7 +42,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -65,10 +61,8 @@ public class UserService {
     private final FeedMessageRepository feedMessageRepository;
     private final NotificationRepository notificationRepository;
     private final DeviceTokenRepository deviceTokenRepository;
-    private final RoomRepository roomRepository;
     private final RoomUserRepository roomUserRepository;
-    private final RoomPostRepository roomPostRepository;
-    private final RoomPlaylistRepository roomPlaylistRepository;
+    private final RoomRemover roomRemover;
     private final PasswordEncoder passwordEncoder;
 
     // 회원가입
@@ -437,11 +431,11 @@ public class UserService {
         // 푸시 알림 기기 토큰 삭제
         deviceTokenRepository.deleteAllByUserId(userId);
 
-        // 방장인 방 처리
-        handleOwnedRooms(userId);
-
-        // 방 멤버 정보 삭제
-        roomUserRepository.deleteAllByUserId(userId);
+        // 참여 중인 방 나가기 (방장인 방은 가장 먼저 참여한 멤버에게 위임, 다른 멤버가 없으면 방 삭제)
+        List<RoomUser> roomUsers = roomUserRepository.findAllByUserId(userId);
+        for (RoomUser roomUser : roomUsers) {
+            roomRemover.leaveRoom(roomUser);
+        }
 
         // 개인정보 파기 및 탈퇴 일시 저장
         user.deleteUser(LocalDateTime.now());
@@ -451,36 +445,5 @@ public class UserService {
 
         // 로그 출력
         log.info("[UserService] 회원탈퇴 성공: userId = {}", userId);
-    }
-
-    // 방장인 방은 가장 먼저 참여한 멤버에게 위임하고, 다른 멤버가 없으면 방 삭제
-    private void handleOwnedRooms(Long userId) {
-
-        List<RoomUser> roomUsers = roomUserRepository.findAllByUserId(userId);
-
-        for (RoomUser roomUser : roomUsers) {
-
-            // 방장이 아니면 위임하지 않음
-            if (roomUser.getRole() != RoomRole.OWNER) {
-                continue;
-            }
-
-            Long roomId = roomUser.getRoom().getId();
-
-            // 가장 먼저 참여한 멤버 조회
-            Optional<RoomUser> nextOwner = roomUserRepository.findFirstByRoomIdAndUserIdNotOrderByIdAsc(roomId, userId);
-
-            // 다른 멤버가 있으면 방장 위임
-            if (nextOwner.isPresent()) {
-                nextOwner.get().delegateOwner();
-                continue;
-            }
-
-            // 다른 멤버가 없으면 방 삭제
-            roomPostRepository.deleteAllByRoomId(roomId);
-            roomPlaylistRepository.deleteAllByRoomId(roomId);
-            roomUserRepository.deleteAllByRoomId(roomId);
-            roomRepository.deleteById(roomId);
-        }
     }
 }
