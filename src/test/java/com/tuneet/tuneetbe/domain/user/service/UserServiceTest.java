@@ -7,10 +7,6 @@ import com.tuneet.tuneetbe.domain.music.enums.GenreType;
 import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
 import com.tuneet.tuneetbe.domain.notification.repository.DeviceTokenRepository;
 import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository;
-import com.tuneet.tuneetbe.domain.room.entity.Room;
-import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
-import com.tuneet.tuneetbe.domain.room.enums.RoomRole;
-import com.tuneet.tuneetbe.domain.room.repository.RoomUserRepository;
 import com.tuneet.tuneetbe.domain.room.service.RoomRemover;
 import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
@@ -102,9 +98,6 @@ class UserServiceTest {
 
     @Mock
     private DeviceTokenRepository deviceTokenRepository;
-
-    @Mock
-    private RoomUserRepository roomUserRepository;
 
     @Mock
     private RoomRemover roomRemover;
@@ -245,8 +238,6 @@ class UserServiceTest {
     @DisplayName("회원탈퇴")
     class DeleteUser {
 
-        private static final Long ROOM_ID = 10L;
-
         private User deletableUser() {
             User user = User.builder()
                     .email("test01@email.com")
@@ -258,15 +249,6 @@ class UserServiceTest {
             user.updateProfile("튜니", "profile.png");
             user.updateRefreshToken("hash", LocalDateTime.now());
             return user;
-        }
-
-        private RoomUser roomUser(RoomRole role) {
-            Room room = BeanUtils.instantiateClass(Room.class);
-            ReflectionTestUtils.setField(room, "id", ROOM_ID);
-            RoomUser roomUser = BeanUtils.instantiateClass(RoomUser.class);
-            ReflectionTestUtils.setField(roomUser, "room", room);
-            ReflectionTestUtils.setField(roomUser, "role", role);
-            return roomUser;
         }
 
         @Test
@@ -315,17 +297,13 @@ class UserServiceTest {
         @DisplayName("참여 중인 방을 모두 나간다")
         void leaveRooms() {
             // given
-            RoomUser ownerRoom = roomUser(RoomRole.OWNER);
-            RoomUser memberRoom = roomUser(RoomRole.MEMBER);
             given(userRepository.findById(USER_ID)).willReturn(Optional.of(deletableUser()));
-            given(roomUserRepository.findAllByUserId(USER_ID)).willReturn(List.of(ownerRoom, memberRoom));
 
             // when
             userService.deleteUser(USER_ID);
 
             // then
-            verify(roomRemover).leaveRoom(ownerRoom);
-            verify(roomRemover).leaveRoom(memberRoom);
+            verify(roomRemover).leaveAllRooms(USER_ID);
         }
 
         @Test

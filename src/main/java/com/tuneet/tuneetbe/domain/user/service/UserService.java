@@ -7,8 +7,6 @@ import com.tuneet.tuneetbe.domain.music.entity.Genre;
 import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
 import com.tuneet.tuneetbe.domain.notification.repository.DeviceTokenRepository;
 import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository;
-import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
-import com.tuneet.tuneetbe.domain.room.repository.RoomUserRepository;
 import com.tuneet.tuneetbe.domain.room.service.RoomRemover;
 import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
@@ -61,7 +59,6 @@ public class UserService {
     private final FeedMessageRepository feedMessageRepository;
     private final NotificationRepository notificationRepository;
     private final DeviceTokenRepository deviceTokenRepository;
-    private final RoomUserRepository roomUserRepository;
     private final RoomRemover roomRemover;
     private final PasswordEncoder passwordEncoder;
 
@@ -432,10 +429,7 @@ public class UserService {
         deviceTokenRepository.deleteAllByUserId(userId);
 
         // 참여 중인 방 나가기 (방장인 방은 가장 먼저 참여한 멤버에게 위임, 다른 멤버가 없으면 방 삭제)
-        List<RoomUser> roomUsers = roomUserRepository.findAllByUserId(userId);
-        for (RoomUser roomUser : roomUsers) {
-            roomRemover.leaveRoom(roomUser);
-        }
+        roomRemover.leaveAllRooms(userId);
 
         // 개인정보 파기 및 탈퇴 일시 저장
         user.deleteUser(LocalDateTime.now());

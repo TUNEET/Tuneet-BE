@@ -204,8 +204,8 @@ public class RoomService {
     @Transactional
     public void leaveRoom(Long roomId, Long userId) {
 
-        // 1. 방 멤버 검사 + 내 역할 탐색
-        RoomUser me = roomMemberReader.getMember(roomId, userId);
+        // 1. 방 잠금 + 방 멤버 검사 + 내 역할 탐색 (동시에 나가도 방장이 없는 방이 남지 않도록)
+        RoomUser me = roomMemberReader.getMemberForUpdate(roomId, userId);
 
         // 2. 나가기 (방장이면 가장 먼저 참여한 멤버에게 위임, 다른 멤버가 없으면 방 삭제)
         roomRemover.leaveRoom(me);
@@ -217,8 +217,8 @@ public class RoomService {
     @Transactional
     public void deleteRoom(Long roomId, Long userId) {
 
-        // 1. 방 멤버 검사 + 내 역할 탐색
-        RoomUser me = roomMemberReader.getMember(roomId, userId);
+        // 1. 방 잠금 + 방 멤버 검사 + 내 역할 탐색
+        RoomUser me = roomMemberReader.getMemberForUpdate(roomId, userId);
 
         // 2. 주인이 아니라면 -> 삭제 불가
         if (me.getRole() != RoomRole.OWNER) {

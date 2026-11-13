@@ -21,7 +21,21 @@ public class RoomRemover {
     private final RoomPostRepository roomPostRepository;
     private final RoomPlaylistRepository roomPlaylistRepository;
 
+    // 참여 중인 방 모두 나가기 (회원탈퇴)
+    public void leaveAllRooms(Long userId) {
+
+        // 방 id 오름차순으로 잠가서 여러 방을 잠글 때 교착 상태를 막음
+        for (Long roomId : roomUserRepository.findRoomIdsByUserId(userId)) {
+
+            // 그 사이 방이 삭제됐거나 이미 나간 방은 건너뜀
+            roomRepository.findByIdForUpdate(roomId)
+                    .flatMap(room -> roomUserRepository.findByRoomIdAndUserIdForUpdate(roomId, userId))
+                    .ifPresent(this::leaveRoom);
+        }
+    }
+
     // 방 나가기 (방장이면 가장 먼저 참여한 멤버에게 위임, 다른 멤버가 없으면 방 삭제)
+    // 방 행을 잠그고 다시 조회한 멤버 정보로 호출해야 동시 요청에도 역할이 맞음
     public void leaveRoom(RoomUser roomUser) {
 
         Long roomId = roomUser.getRoom().getId();
@@ -46,10 +60,11 @@ public class RoomRemover {
     }
 
     // 방 삭제 (방의 자식 데이터부터 삭제)
+    // 모두 벌크 삭제: 회원탈퇴처럼 앞에서 조회한 트랜잭션에서도 최신 행을 지우고, 영속성 컨텍스트의 엔티티와 섞이지 않음
     public void deleteRoom(Long roomId) {
         roomPostRepository.deleteAllByRoomId(roomId);
         roomPlaylistRepository.deleteAllByRoomId(roomId);
         roomUserRepository.deleteAllByRoomId(roomId);
-        roomRepository.deleteById(roomId);
+        roomRepository.deleteRoomById(roomId);
     }
 }

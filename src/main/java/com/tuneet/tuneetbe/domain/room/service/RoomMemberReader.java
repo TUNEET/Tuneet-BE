@@ -29,4 +29,12 @@ public class RoomMemberReader {
         return roomUserRepository.findByRoomIdAndUserId(room.getId(), userId)
                 .orElseThrow(() -> new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
     }
+
+    // 방 행을 잠그고 내 멤버 정보 반환 (방 나가기, 삭제처럼 멤버 구성이 바뀔 때 사용)
+    public RoomUser getMemberForUpdate(Long roomId, Long userId) {
+        Room room = roomRepository.findByIdForUpdate(roomId)
+                .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
+        return roomUserRepository.findByRoomIdAndUserIdForUpdate(room.getId(), userId)
+                .orElseThrow(() -> new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
+    }
 }

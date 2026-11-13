@@ -6,14 +6,19 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface RoomPostRepository extends JpaRepository<RoomPost, Long> {
 
-    // 방의 글 전체 삭제
-    void deleteAllByRoomId(Long roomId);
+    // 방의 글 전체 삭제 (쿼리 1번)
+    @Modifying
+    @Query("delete from RoomPost rp where rp.room.id = :roomId")
+    void deleteAllByRoomId(@Param("roomId") Long roomId);
 
     @EntityGraph(attributePaths = {"user", "music"})
     List<RoomPost> findTop2ByRoomOrderByCreatedAtDescIdDesc(Room room);
