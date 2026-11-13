@@ -106,7 +106,7 @@ class RoomPlaylistServiceTest {
 
             assertThat(response.getRoomPlaylistId()).isEqualTo(PLAYLIST_ID);
             assertThat(response.getPosition()).isEqualTo(4);
-            assertThat(response.getMusic().getMusicId()).isEqualTo(7L);
+            assertThat(response.getMusic().getMusicId()).isEqualTo("music-7");
         }
 
         @Test
@@ -505,6 +505,7 @@ class RoomPlaylistServiceTest {
     private Music music(Long id, String title) {
         Music music = BeanUtils.instantiateClass(Music.class);
         ReflectionTestUtils.setField(music, "id", id);
+        ReflectionTestUtils.setField(music, "externalId", "music-" + id);
         ReflectionTestUtils.setField(music, "title", title);
         ReflectionTestUtils.setField(music, "artist", "NewJeans");
         return music;

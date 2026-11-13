@@ -79,6 +79,7 @@ class UserTasteServiceTest {
     private Music music(long id) {
         Music music = BeanUtils.instantiateClass(Music.class);
         ReflectionTestUtils.setField(music, "id", id);
+        ReflectionTestUtils.setField(music, "externalId", "music-" + id);
         ReflectionTestUtils.setField(music, "title", "제목" + id);
         return music;
     }
@@ -86,6 +87,7 @@ class UserTasteServiceTest {
     private Artist artist(long id) {
         Artist artist = BeanUtils.instantiateClass(Artist.class);
         ReflectionTestUtils.setField(artist, "id", id);
+        ReflectionTestUtils.setField(artist, "externalId", "artist-" + id);
         ReflectionTestUtils.setField(artist, "name", "가수" + id);
         return artist;
     }
@@ -107,7 +109,7 @@ class UserTasteServiceTest {
         ArgumentCaptor<List<UserMusic>> saved = ArgumentCaptor.captor();
         verify(userMusicRepository).saveAll(saved.capture());
         assertThat(saved.getValue()).extracting(um -> um.getMusic().getId()).containsExactly(2L);
-        assertThat(response.getMusics()).extracting("musicId").containsExactly(2L, 1L);
+        assertThat(response.getMusics()).extracting("musicId").containsExactly("music-2", "music-1");
     }
 
     @Test
@@ -127,7 +129,7 @@ class UserTasteServiceTest {
         ArgumentCaptor<List<UserArtist>> saved = ArgumentCaptor.captor();
         verify(userArtistRepository).saveAll(saved.capture());
         assertThat(saved.getValue()).extracting(ua -> ua.getArtist().getId()).containsExactly(3L, 2L);
-        assertThat(response.getArtists()).extracting("artistId").containsExactly(3L, 1L, 2L);
+        assertThat(response.getArtists()).extracting("artistId").containsExactly("artist-3", "artist-1", "artist-2");
     }
 
     @Test

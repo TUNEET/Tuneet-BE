@@ -543,14 +543,14 @@ class RoomServiceTest {
                 assertThat(post.getRoomPostId()).isEqualTo(20L);
                 assertThat(post.getNickname()).isEqualTo("방장");
                 assertThat(post.getContent()).isEqualTo("요즘 계속 듣는 노래");
-                assertThat(post.getMusic().getMusicId()).isEqualTo(7L);
+                assertThat(post.getMusic().getMusicId()).isEqualTo("music-7");
                 assertThat(post.getMusic().getTitle()).isEqualTo("Hype Boy");
                 assertThat(post.getIsMine()).isFalse();
             });
             assertThat(response.getRoomPlaylists()).singleElement().satisfies(item -> {
                 assertThat(item.getRoomPlaylistId()).isEqualTo(30L);
                 assertThat(item.getPosition()).isEqualTo(1);
-                assertThat(item.getMusic().getMusicId()).isEqualTo(7L);
+                assertThat(item.getMusic().getMusicId()).isEqualTo("music-7");
             });
         }
 
@@ -719,6 +719,7 @@ class RoomServiceTest {
     private Music music(Long id, String title) {
         Music music = BeanUtils.instantiateClass(Music.class);
         ReflectionTestUtils.setField(music, "id", id);
+        ReflectionTestUtils.setField(music, "externalId", "music-" + id);
         ReflectionTestUtils.setField(music, "title", title);
         ReflectionTestUtils.setField(music, "artist", "NewJeans");
         return music;

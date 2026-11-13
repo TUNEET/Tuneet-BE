@@ -111,7 +111,7 @@ public class NotificationService {
                 .feedId(feedMessage.getFeed().getId())
                 .messageContent(feedMessage.getMessageContent())
                 .music(MusicResponse.builder()
-                        .musicId(music.getId())
+                        .musicId(music.getExternalId())
                         .title(music.getTitle())
                         .artist(music.getArtist())
                         .musicPicture(music.getMusicPicture())

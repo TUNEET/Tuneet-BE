@@ -13,8 +13,8 @@ import lombok.NoArgsConstructor;
 @Schema(title = "아티스트 응답 dto", description = "아티스트 정보")
 public class ArtistResponse {
 
-    @Schema(description = "아티스트 고유번호", example = "1")
-    private Long artistId;
+    @Schema(description = "아티스트 검색 결과의 id", example = "b9545342-1e6d-4dae-84ac-013374ad8d7c")
+    private String artistId;
 
     @Schema(description = "아티스트 이름", example = "아티스트")
     private String name;

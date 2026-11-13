@@ -54,6 +54,8 @@ class FeedServiceTest {
     private static final Long OTHER_USER_ID = 2L;
     private static final Long FEED_ID = 100L;
     private static final Long MUSIC_ID = 10L;
+    private static final String MUSIC_EXTERNAL_ID = "27e95178-49ac-47a1-8b4c-540c77982680";
+    private static final String NEW_MUSIC_EXTERNAL_ID = "5b11f4ce-a62d-471e-81fc-a69a8278c7da";
     private static final String CONTENT = "이 노래 너무 좋아요!";
 
     @Mock
@@ -89,6 +91,7 @@ class FeedServiceTest {
     private Music savedMusic() {
         Music music = BeanUtils.instantiateClass(Music.class);
         ReflectionTestUtils.setField(music, "id", MUSIC_ID);
+        ReflectionTestUtils.setField(music, "externalId", MUSIC_EXTERNAL_ID);
         ReflectionTestUtils.setField(music, "title", "Pretty Girl");
         ReflectionTestUtils.setField(music, "artist", "RESCENE");
         ReflectionTestUtils.setField(music, "musicPicture", "cover.png");
@@ -127,7 +130,7 @@ class FeedServiceTest {
             assertThat(response.getFeedId()).isEqualTo(FEED_ID);
             assertThat(response.getNickname()).isEqualTo("튜니");
             assertThat(response.getContent()).isEqualTo(CONTENT);
-            assertThat(response.getMusic().getMusicId()).isEqualTo(MUSIC_ID);
+            assertThat(response.getMusic().getMusicId()).isEqualTo(MUSIC_EXTERNAL_ID);
             assertThat(response.getMusic().getTitle()).isEqualTo("Pretty Girl");
             assertThat(response.getMusic().getArtist()).isEqualTo("RESCENE");
             assertThat(response.getMusic().getMusicPicture()).isEqualTo("cover.png");
@@ -186,7 +189,7 @@ class FeedServiceTest {
             assertThat(response.getNickname()).isEqualTo("튜니");
             assertThat(response.getProfilePicture()).isEqualTo("profile.png");
             assertThat(response.getContent()).isEqualTo(CONTENT);
-            assertThat(response.getMusic().getMusicId()).isEqualTo(MUSIC_ID);
+            assertThat(response.getMusic().getMusicId()).isEqualTo(MUSIC_EXTERNAL_ID);
             assertThat(response.getIsMine()).isTrue();
         }
 
@@ -283,6 +286,7 @@ class FeedServiceTest {
     private Music newMusic() {
         Music music = BeanUtils.instantiateClass(Music.class);
         ReflectionTestUtils.setField(music, "id", 20L);
+        ReflectionTestUtils.setField(music, "externalId", NEW_MUSIC_EXTERNAL_ID);
         ReflectionTestUtils.setField(music, "title", "I GOT YOU");
         ReflectionTestUtils.setField(music, "artist", "TWICE");
         ReflectionTestUtils.setField(music, "musicPicture", "new-cover.png");
@@ -311,7 +315,7 @@ class FeedServiceTest {
             assertThat(feed.getContent()).isEqualTo(NEW_CONTENT);
             assertThat(feed.getMusic().getId()).isEqualTo(MUSIC_ID);
             assertThat(response.getContent()).isEqualTo(NEW_CONTENT);
-            assertThat(response.getMusic().getMusicId()).isEqualTo(MUSIC_ID);
+            assertThat(response.getMusic().getMusicId()).isEqualTo(MUSIC_EXTERNAL_ID);
             assertThat(response.getMusic().getTitle()).isEqualTo("Pretty Girl");
         }
 
@@ -329,7 +333,7 @@ class FeedServiceTest {
 
             // then
             assertThat(feed.getMusic().getId()).isEqualTo(20L);
-            assertThat(response.getMusic().getMusicId()).isEqualTo(20L);
+            assertThat(response.getMusic().getMusicId()).isEqualTo(NEW_MUSIC_EXTERNAL_ID);
             assertThat(response.getMusic().getTitle()).isEqualTo("I GOT YOU");
             assertThat(response.getContent()).isEqualTo(NEW_CONTENT);
         }
@@ -519,7 +523,7 @@ class FeedServiceTest {
             assertThat(response.getFeedId()).isEqualTo(FEED_ID);
             assertThat(response.getNickname()).isEqualTo("튜니");
             assertThat(response.getProfilePicture()).isEqualTo("me.png");
-            assertThat(response.getMusic().getMusicId()).isEqualTo(20L);
+            assertThat(response.getMusic().getMusicId()).isEqualTo(NEW_MUSIC_EXTERNAL_ID);
             assertThat(response.getMessageContent()).isEqualTo(MESSAGE);
         }
 

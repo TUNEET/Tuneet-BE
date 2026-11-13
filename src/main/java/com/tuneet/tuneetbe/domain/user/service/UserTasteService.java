@@ -100,7 +100,7 @@ public class UserTasteService {
 
     private MusicResponse toMusicResponse(Music music) {
         return MusicResponse.builder()
-                .musicId(music.getId())
+                .musicId(music.getExternalId())
                 .title(music.getTitle())
                 .artist(music.getArtist())
                 .musicPicture(music.getMusicPicture())
@@ -109,7 +109,7 @@ public class UserTasteService {
 
     private ArtistResponse toArtistResponse(Artist artist) {
         return ArtistResponse.builder()
-                .artistId(artist.getId())
+                .artistId(artist.getExternalId())
                 .name(artist.getName())
                 .artistImage(artist.getArtistImage())
                 .build();

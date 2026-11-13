@@ -104,7 +104,7 @@ class RoomPostServiceTest {
             assertThat(response.getRoomPostId()).isEqualTo(POST_ID);
             assertThat(response.getNickname()).isEqualTo("나");
             assertThat(response.getProfilePicture()).isEqualTo("https://.../profile/1.png");
-            assertThat(response.getMusic().getMusicId()).isEqualTo(7L);
+            assertThat(response.getMusic().getMusicId()).isEqualTo("music-7");
             assertThat(response.getIsMine()).isTrue();
         }
 
@@ -382,6 +382,7 @@ class RoomPostServiceTest {
     private Music music(Long id, String title) {
         Music music = BeanUtils.instantiateClass(Music.class);
         ReflectionTestUtils.setField(music, "id", id);
+        ReflectionTestUtils.setField(music, "externalId", "music-" + id);
         ReflectionTestUtils.setField(music, "title", title);
         ReflectionTestUtils.setField(music, "artist", "NewJeans");
         return music;
