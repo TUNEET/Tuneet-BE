@@ -13,7 +13,9 @@ import com.tuneet.tuneetbe.domain.notification.enums.NotificationType;
 import com.tuneet.tuneetbe.domain.notification.event.PushEvent;
 import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository;
 import com.tuneet.tuneetbe.domain.user.entity.User;
+import com.tuneet.tuneetbe.domain.user.entity.UserBlock;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
+import com.tuneet.tuneetbe.domain.user.repository.UserBlockRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
 import com.tuneet.tuneetbe.global.exception.CustomException;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +41,7 @@ public class FeedService {
     private final FeedMessageRepository feedMessageRepository;
     private final NotificationRepository notificationRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final UserBlockRepository userBlockRepository;
 
     // 피드 작성
     @Transactional
@@ -80,6 +83,13 @@ public class FeedService {
         Feed feed = feedRepository.findById(feedId)
                 .orElseThrow(() -> new CustomException(FeedErrorCode.FEED_NOT_FOUND));
 
+        // 차단 관계인 사용자의 피드인지 확인
+        Long writerId = feed.getUser().getId();
+        if (userBlockRepository.existsByBlockerIdAndBlockedIdOrBlockerIdAndBlockedId(userId, writerId, writerId, userId)) {
+            log.warn("[FeedService] 차단 관계인 사용자의 피드입니다.");
+            throw new CustomException(UserErrorCode.BLOCKED_USER);
+        }
+
         // 응답 반환
         return toFeedDetailResponse(userId, feed);
     }
@@ -112,13 +122,27 @@ public class FeedService {
         Pageable pageable = PageRequest.of(0, size);
         Slice<Feed> feeds;
 
+        // 차단 관계인 사용자 조회 (내가 차단했거나 나를 차단한 사용자의 피드는 목록에서 제외)
+        List<Long> blockedUserIds = getBlockedRelationUserIds(userId);
+
         // 커서가 없으면 최신 피드부터 조회
         if (cursor == null) {
-            feeds = feedRepository.findAllByOrderByIdDesc(pageable);
+            // 차단 관계인 사용자가 없으면 전체 조회, 있으면 그 사용자의 피드를 빼고 조회
+            if (blockedUserIds.isEmpty()) {
+                feeds = feedRepository.findAllByOrderByIdDesc(pageable);
+            }
+            else {
+                feeds = feedRepository.findByUserIdNotInOrderByIdDesc(blockedUserIds, pageable);
+            }
         }
         else {
             // 커서가 있으면 커서보다 이전 피드 조회
-            feeds = feedRepository.findByIdLessThanOrderByIdDesc(cursor, pageable);
+            if (blockedUserIds.isEmpty()) {
+                feeds = feedRepository.findByIdLessThanOrderByIdDesc(cursor, pageable);
+            }
+            else {
+                feeds = feedRepository.findByUserIdNotInAndIdLessThanOrderByIdDesc(blockedUserIds, cursor, pageable);
+            }
         }
 
         // 응답 목록 세팅
@@ -232,6 +256,13 @@ public class FeedService {
             throw new CustomException(FeedErrorCode.FEED_MESSAGE_SELF);
         }
 
+        // 차단 관계인 사용자의 피드인지 확인
+        Long writerId = feed.getUser().getId();
+        if (userBlockRepository.existsByBlockerIdAndBlockedIdOrBlockerIdAndBlockedId(userId, writerId, writerId, userId)) {
+            log.warn("[FeedService] 차단 관계인 사용자의 피드입니다.");
+            throw new CustomException(UserErrorCode.BLOCKED_USER);
+        }
+
         // DB 저장
         FeedMessage feedMessage = feedMessageRepository.save(FeedMessage.builder()
                 .user(user)
@@ -338,5 +369,23 @@ public class FeedService {
 
         // 로그 출력
         log.info("[FeedService] 보낸 코멘트 전체 삭제 성공: userId = {}, count = {}", userId, feedMessages.size());
+    }
+
+    // 나와 차단 관계인 사용자 id 목록 (내가 차단한 사용자 + 나를 차단한 사용자)
+    private List<Long> getBlockedRelationUserIds(Long userId) {
+
+        List<Long> blockedUserIds = new ArrayList<>();
+        for (UserBlock userBlock : userBlockRepository.findAllByBlockerIdOrBlockedId(userId, userId)) {
+
+            // 내가 차단한 기록이면 차단된 사람, 나를 차단한 기록이면 차단한 사람
+            if (userBlock.getBlocker().getId().equals(userId)) {
+                blockedUserIds.add(userBlock.getBlocked().getId());
+            }
+            else {
+                blockedUserIds.add(userBlock.getBlocker().getId());
+            }
+        }
+
+        return blockedUserIds;
     }
 }

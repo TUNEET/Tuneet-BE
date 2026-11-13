@@ -14,6 +14,7 @@ import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SettingsUpdateRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SignUpRequest;
+import com.tuneet.tuneetbe.domain.user.dto.response.BlockedUserListResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.EmailAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.GenreReplaceResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.MyProfileResponse;
@@ -23,6 +24,8 @@ import com.tuneet.tuneetbe.domain.user.dto.response.SettingsResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.UserProfileResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.entity.UserArtist;
+import com.tuneet.tuneetbe.domain.user.entity.UserBlock;
+import com.tuneet.tuneetbe.domain.user.enums.BlockType;
 import com.tuneet.tuneetbe.domain.user.entity.UserGenre;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserArtistRepository;
@@ -188,6 +191,24 @@ class UserServiceTest {
                     .containsExactly(GenreType.K_POP);
             assertThat(response.getCommon().getArtists()).isEmpty();
             assertThat(response.getCommon().getMusic()).isNull();
+            assertThat(response.getIsBlocked()).isFalse();
+        }
+
+        @Test
+        @DisplayName("내가 차단한 사용자의 프로필이면 isBlocked가 true이다")
+        void blockedByMe() {
+            // given
+            User targetUser = savedUser("산책하는 튜니", null);
+            ReflectionTestUtils.setField(targetUser, "id", TARGET_USER_ID);
+            given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.of(targetUser));
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(savedUser("나", null)));
+            given(userBlockRepository.existsByBlockerIdAndBlockedId(USER_ID, TARGET_USER_ID)).willReturn(true);
+
+            // when
+            UserProfileResponse response = userService.getUserProfile(USER_ID, TARGET_USER_ID);
+
+            // then
+            assertThat(response.getIsBlocked()).isTrue();
         }
 
         @Test
@@ -1011,6 +1032,188 @@ class UserServiceTest {
 
             // then
             assertThat(response.getAvailable()).isFalse();
+        }
+    }
+
+    private User blockTarget(Long id, String nickname, String profilePicture) {
+        User user = savedUser(nickname, profilePicture);
+        ReflectionTestUtils.setField(user, "id", id);
+        return user;
+    }
+
+    @Nested
+    @DisplayName("사용자 차단")
+    class BlockUser {
+
+        private static final Long BLOCKED_USER_ID = 2L;
+
+        @Test
+        @DisplayName("다른 사용자를 차단하면 차단 기록을 BLOCK 타입으로 저장한다")
+        void success() {
+            // given
+            User me = savedUser("튜니", null);
+            User target = blockTarget(BLOCKED_USER_ID, "산책하는 튜니", null);
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(me));
+            given(userRepository.findById(BLOCKED_USER_ID)).willReturn(Optional.of(target));
+            given(userBlockRepository.existsByBlockerIdAndBlockedId(USER_ID, BLOCKED_USER_ID)).willReturn(false);
+
+            // when
+            userService.blockUser(USER_ID, BLOCKED_USER_ID);
+
+            // then
+            ArgumentCaptor<UserBlock> captor = ArgumentCaptor.forClass(UserBlock.class);
+            verify(userBlockRepository).save(captor.capture());
+            assertThat(captor.getValue().getBlocker()).isEqualTo(me);
+            assertThat(captor.getValue().getBlocked()).isEqualTo(target);
+            assertThat(captor.getValue().getType()).isEqualTo(BlockType.BLOCK);
+        }
+
+        @Test
+        @DisplayName("본인을 차단하면 SELF_BLOCK_NOT_ALLOWED 예외가 발생하고 사용자를 조회하지 않는다")
+        void self() {
+            // when & then
+            assertThatThrownBy(() -> userService.blockUser(USER_ID, USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.SELF_BLOCK_NOT_ALLOWED);
+            verify(userRepository, never()).findById(any());
+            verify(userBlockRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("존재하지 않는 사용자를 차단하면 USER_NOT_FOUND 예외가 발생하고 저장하지 않는다")
+        void targetNotFound() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(savedUser("튜니", null)));
+            given(userRepository.findById(BLOCKED_USER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> userService.blockUser(USER_ID, BLOCKED_USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+            verify(userBlockRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("탈퇴한 사용자를 차단하면 USER_NOT_FOUND 예외가 발생하고 저장하지 않는다")
+        void deletedTarget() {
+            // given
+            User target = blockTarget(BLOCKED_USER_ID, "산책하는 튜니", null);
+            target.deleteUser(LocalDateTime.now());
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(savedUser("튜니", null)));
+            given(userRepository.findById(BLOCKED_USER_ID)).willReturn(Optional.of(target));
+
+            // when & then
+            assertThatThrownBy(() -> userService.blockUser(USER_ID, BLOCKED_USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+            verify(userBlockRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("이미 차단한 사용자를 다시 차단하면 ALREADY_BLOCKED 예외가 발생하고 저장하지 않는다")
+        void alreadyBlocked() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(savedUser("튜니", null)));
+            given(userRepository.findById(BLOCKED_USER_ID)).willReturn(Optional.of(blockTarget(BLOCKED_USER_ID, "산책하는 튜니", null)));
+            given(userBlockRepository.existsByBlockerIdAndBlockedId(USER_ID, BLOCKED_USER_ID)).willReturn(true);
+
+            // when & then
+            assertThatThrownBy(() -> userService.blockUser(USER_ID, BLOCKED_USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.ALREADY_BLOCKED);
+            verify(userBlockRepository, never()).save(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("사용자 차단 해제")
+    class UnblockUser {
+
+        private static final Long BLOCKED_USER_ID = 2L;
+
+        @Test
+        @DisplayName("내가 차단한 기록을 삭제한다")
+        void success() {
+            // given
+            UserBlock userBlock = UserBlock.builder()
+                    .blocker(savedUser("튜니", null))
+                    .blocked(blockTarget(BLOCKED_USER_ID, "산책하는 튜니", null))
+                    .type(BlockType.BLOCK)
+                    .build();
+            given(userBlockRepository.findByBlockerIdAndBlockedId(USER_ID, BLOCKED_USER_ID)).willReturn(Optional.of(userBlock));
+
+            // when
+            userService.unblockUser(USER_ID, BLOCKED_USER_ID);
+
+            // then
+            verify(userBlockRepository).delete(userBlock);
+        }
+
+        @Test
+        @DisplayName("차단하지 않은 사용자를 해제하면 BLOCK_NOT_FOUND 예외가 발생하고 삭제하지 않는다")
+        void notBlocked() {
+            // given
+            given(userBlockRepository.findByBlockerIdAndBlockedId(USER_ID, BLOCKED_USER_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> userService.unblockUser(USER_ID, BLOCKED_USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.BLOCK_NOT_FOUND);
+            verify(userBlockRepository, never()).delete(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("차단한 사용자 목록 조회")
+    class GetBlockedUsers {
+
+        private UserBlock userBlock(User blocker, User blocked, LocalDateTime createdAt) {
+            UserBlock userBlock = UserBlock.builder()
+                    .blocker(blocker)
+                    .blocked(blocked)
+                    .type(BlockType.BLOCK)
+                    .build();
+            ReflectionTestUtils.setField(userBlock, "createdAt", createdAt);
+            return userBlock;
+        }
+
+        @Test
+        @DisplayName("내가 차단한 사용자를 최근 차단순으로 닉네임, 프로필 사진, 차단 날짜와 함께 반환한다")
+        void success() {
+            // given
+            User me = savedUser("튜니", null);
+            LocalDateTime recentAt = LocalDateTime.of(2026, 11, 21, 10, 0);
+            LocalDateTime oldAt = LocalDateTime.of(2026, 11, 20, 9, 0);
+            given(userBlockRepository.findAllByBlockerIdOrderByIdDesc(USER_ID)).willReturn(List.of(
+                    userBlock(me, blockTarget(3L, "커피 마시는 튜니", "coffee.png"), recentAt),
+                    userBlock(me, blockTarget(2L, "산책하는 튜니", null), oldAt)));
+
+            // when
+            BlockedUserListResponse response = userService.getBlockedUsers(USER_ID);
+
+            // then
+            assertThat(response.getBlockedUsers()).extracting("userId").containsExactly(3L, 2L);
+            assertThat(response.getBlockedUsers()).extracting("nickname").containsExactly("커피 마시는 튜니", "산책하는 튜니");
+            assertThat(response.getBlockedUsers()).extracting("profilePicture").containsExactly("coffee.png", null);
+            assertThat(response.getBlockedUsers()).extracting("blockedAt").containsExactly(recentAt, oldAt);
+        }
+
+        @Test
+        @DisplayName("차단한 사용자가 없으면 빈 목록을 반환한다")
+        void empty() {
+            // given
+            given(userBlockRepository.findAllByBlockerIdOrderByIdDesc(USER_ID)).willReturn(List.of());
+
+            // when
+            BlockedUserListResponse response = userService.getBlockedUsers(USER_ID);
+
+            // then
+            assertThat(response.getBlockedUsers()).isEmpty();
         }
     }
 }

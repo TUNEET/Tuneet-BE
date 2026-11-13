@@ -46,6 +46,9 @@ public class UserProfileResponse {
     @Schema(description = "편지 받기 여부", example = "true")
     private Boolean letterReceivable;
 
+    @Schema(description = "내가 이 사용자를 차단했는지 여부", example = "false")
+    private Boolean isBlocked;
+
     @Schema(description = "나와 함께 좋아하는 항목")
     private Common common;
 
