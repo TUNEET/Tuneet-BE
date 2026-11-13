@@ -8,6 +8,7 @@ import com.tuneet.tuneetbe.domain.letter.dto.response.LetterListResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterRemainingResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterSendResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.RandomLetterSendResponse;
+import com.tuneet.tuneetbe.domain.letter.dto.response.SentLetterListResponse;
 import com.tuneet.tuneetbe.domain.letter.service.LetterService;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.music.service.MusicCatalogService;
@@ -157,5 +158,36 @@ public class LetterController {
 
         // 응답 반환
         return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(201, "답장 보내기 성공", response));
+    }
+
+    // 보낸 편지 리스트 보기
+    @Operation(summary = "보낸 편지 리스트 보기", description = "사용자가 보낸 편지 목록을 최신순으로 조회하는 API")
+    @GetMapping("/letters/sent")
+    public ResponseEntity<BaseResponse<SentLetterListResponse>> getSentLetters(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(required = false) Long cursor,
+            @RequestParam(defaultValue = "20")
+            @Min(value = 1, message = "size는 1 이상이어야 합니다.")
+            @Max(value = 50, message = "size는 50 이하여야 합니다.")
+            int size) {
+
+        // service 호출
+        SentLetterListResponse response = letterService.sentLetterList(userDetails.getUserId(), cursor, size);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "보낸 편지 리스트 조회 성공", response));
+    }
+
+    // 보낸 편지 전체 삭제
+    @Operation(summary = "보낸 편지 전체 삭제", description = "사용자가 보낸 편지를 보낸 목록에서 모두 삭제하는 API (받은 사람의 편지함에는 그대로 남음)")
+    @DeleteMapping("/letters/sent")
+    public ResponseEntity<BaseResponse<Void>> deleteAllSentLetters(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+
+        // service 호출
+        letterService.deleteAllSentLetters(userDetails.getUserId());
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "보낸 편지 전체 삭제 성공", null));
     }
 }

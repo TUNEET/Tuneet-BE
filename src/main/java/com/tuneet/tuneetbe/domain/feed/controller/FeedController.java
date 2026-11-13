@@ -132,4 +132,35 @@ public class FeedController {
         // 응답 반환
         return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(201, "피드 메시지 작성 성공", response));
     }
+
+    // 보낸 코멘트 리스트 보기
+    @Operation(summary = "보낸 코멘트 리스트 보기", description = "사용자가 다른 사용자의 피드에 보낸 메시지 목록을 최신순으로 조회하는 API")
+    @GetMapping("/feeds/messages/sent")
+    public ResponseEntity<BaseResponse<SentFeedMessageListResponse>> getSentMessages(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(required = false) Long cursor,
+            @RequestParam(defaultValue = "20")
+            @Min(value = 1, message = "size는 1 이상이어야 합니다.")
+            @Max(value = 50, message = "size는 50 이하여야 합니다.")
+            int size) {
+
+        // service 호출
+        SentFeedMessageListResponse response = feedService.getSentMessages(userDetails.getUserId(), cursor, size);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "보낸 코멘트 리스트 조회 성공", response));
+    }
+
+    // 보낸 코멘트 전체 삭제
+    @Operation(summary = "보낸 코멘트 전체 삭제", description = "사용자가 보낸 메시지를 보낸 목록에서 모두 삭제하는 API (받은 사람의 알림에는 그대로 남음)")
+    @DeleteMapping("/feeds/messages/sent")
+    public ResponseEntity<BaseResponse<Void>> deleteAllSentMessages(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+
+        // service 호출
+        feedService.deleteAllSentMessages(userDetails.getUserId());
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "보낸 코멘트 전체 삭제 성공", null));
+    }
 }

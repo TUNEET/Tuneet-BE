@@ -5,6 +5,7 @@ import com.tuneet.tuneetbe.domain.letter.dto.response.LetterListResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterRemainingResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterSendResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.RandomLetterSendResponse;
+import com.tuneet.tuneetbe.domain.letter.dto.response.SentLetterListResponse;
 import com.tuneet.tuneetbe.domain.letter.entity.Letter;
 import com.tuneet.tuneetbe.domain.letter.exception.LetterErrorCode;
 import com.tuneet.tuneetbe.domain.letter.repository.LetterRepository;
@@ -231,7 +232,7 @@ class LetterServiceTest {
     class SendRandomLetter {
 
         @Test
-        @DisplayName("후보 중 한 명에게 랜덤 편지로 저장하고 응답에는 받는 사람을 포함하지 않는다")
+        @DisplayName("후보 중 한 명에게 랜덤 편지로 저장하고 응답에 받는 사람 닉네임을 포함한다")
         void success() {
             // given
             User sender = savedUser(SENDER_ID, "튜니");
@@ -261,6 +262,7 @@ class LetterServiceTest {
 
             assertThat(response.getLetterId()).isEqualTo(LETTER_ID);
             assertThat(response.getSenderNickname()).isEqualTo("튜니");
+            assertThat(response.getReceiverNickname()).isEqualTo("원이");
             assertThat(response.getLetterContent()).isEqualTo(CONTENT);
         }
 
@@ -942,6 +944,130 @@ class LetterServiceTest {
             assertThat(response.getLetters().get(0).getParentLetter()).isNull();
             assertThat(response.getLetters().get(0).getIsReplied()).isNull();
             verify(letterRepository, never()).existsByParentLetterId(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("보낸 편지 리스트 보기")
+    class SentLetterList {
+
+        private static final int SIZE = 2;
+        private final PageRequest pageable = PageRequest.of(0, SIZE);
+
+        @Test
+        @DisplayName("커서가 없으면 내가 보낸 최신 편지부터 받는 사람과 함께 조회한다")
+        void firstPage() {
+            // given
+            User sender = savedUser(SENDER_ID, "튜니");
+            Letter recent = savedLetter(3L, sender, savedUser(RECEIVER_ID, "원이"));
+            Letter old = savedLetter(2L, sender, savedUser(3L, "리브"));
+            given(letterRepository.findBySenderIdAndDeletedBySenderFalseOrderByIdDesc(SENDER_ID, pageable))
+                    .willReturn(new SliceImpl<>(List.of(recent, old), pageable, true));
+
+            // when
+            SentLetterListResponse response = letterService.sentLetterList(SENDER_ID, null, SIZE);
+
+            // then
+            assertThat(response.getLetters()).extracting("letterId").containsExactly(3L, 2L);
+            assertThat(response.getLetters()).extracting("receiverNickname").containsExactly("원이", "리브");
+            assertThat(response.getLetters().get(0).getMusic().getTitle()).isEqualTo("Pretty Girl");
+            assertThat(response.getHasNext()).isTrue();
+            verify(letterRepository, never())
+                    .findBySenderIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(anyLong(), anyLong(), any());
+        }
+
+        @Test
+        @DisplayName("커서가 있으면 커서보다 이전 편지를 조회한다")
+        void nextPage() {
+            // given
+            Letter letter = savedLetter(1L, savedUser(SENDER_ID, "튜니"), savedUser(RECEIVER_ID, "원이"));
+            given(letterRepository.findBySenderIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(SENDER_ID, 2L, pageable))
+                    .willReturn(new SliceImpl<>(List.of(letter), pageable, false));
+
+            // when
+            SentLetterListResponse response = letterService.sentLetterList(SENDER_ID, 2L, SIZE);
+
+            // then
+            assertThat(response.getLetters()).extracting("letterId").containsExactly(1L);
+            assertThat(response.getHasNext()).isFalse();
+            verify(letterRepository, never()).findBySenderIdAndDeletedBySenderFalseOrderByIdDesc(anyLong(), any());
+        }
+
+        @Test
+        @DisplayName("랜덤 편지도 받는 사람 닉네임을 공개하고, 답장이면 답장 여부를 표시한다")
+        void randomAndReply() {
+            // given
+            User sender = savedUser(SENDER_ID, "튜니");
+            User receiver = savedUser(RECEIVER_ID, "원이");
+            Letter random = savedLetter(3L, sender, receiver);
+            ReflectionTestUtils.setField(random, "isRandom", true);
+            Letter reply = savedLetter(2L, sender, receiver);
+            ReflectionTestUtils.setField(reply, "parentLetter", savedLetter(1L, receiver, sender));
+            given(letterRepository.findBySenderIdAndDeletedBySenderFalseOrderByIdDesc(SENDER_ID, pageable))
+                    .willReturn(new SliceImpl<>(List.of(random, reply), pageable, false));
+
+            // when
+            SentLetterListResponse response = letterService.sentLetterList(SENDER_ID, null, SIZE);
+
+            // then
+            assertThat(response.getLetters()).extracting("receiverNickname").containsExactly("원이", "원이");
+            assertThat(response.getLetters()).extracting("isRandom").containsExactly(true, false);
+            assertThat(response.getLetters()).extracting("isReply").containsExactly(false, true);
+        }
+
+        @Test
+        @DisplayName("받는 사람이 탈퇴했으면 탈퇴한 사용자로 표시한다")
+        void deletedReceiver() {
+            // given
+            User receiver = savedUser(RECEIVER_ID, "원이");
+            receiver.deleteUser(LocalDateTime.now());
+            Letter letter = savedLetter(1L, savedUser(SENDER_ID, "튜니"), receiver);
+            given(letterRepository.findBySenderIdAndDeletedBySenderFalseOrderByIdDesc(SENDER_ID, pageable))
+                    .willReturn(new SliceImpl<>(List.of(letter), pageable, false));
+
+            // when
+            SentLetterListResponse response = letterService.sentLetterList(SENDER_ID, null, SIZE);
+
+            // then
+            assertThat(response.getLetters().get(0).getReceiverNickname()).isEqualTo("탈퇴한 사용자");
+        }
+    }
+
+    @Nested
+    @DisplayName("보낸 편지 전체 삭제")
+    class DeleteAllSentLetters {
+
+        @Test
+        @DisplayName("내가 보낸 편지를 보낸 목록에서만 삭제하고 받은 사람의 편지함에는 남긴다")
+        void success() {
+            // given
+            User sender = savedUser(SENDER_ID, "튜니");
+            Letter first = savedLetter(1L, sender, savedUser(RECEIVER_ID, "원이"));
+            Letter second = savedLetter(2L, sender, savedUser(3L, "리브"));
+            given(letterRepository.findAllBySenderIdAndDeletedBySenderFalse(SENDER_ID)).willReturn(List.of(first, second));
+
+            // when
+            letterService.deleteAllSentLetters(SENDER_ID);
+
+            // then
+            assertThat(first.getDeletedBySender()).isTrue();
+            assertThat(second.getDeletedBySender()).isTrue();
+            assertThat(first.getDeletedByReceiver()).isFalse();
+            assertThat(second.getDeletedByReceiver()).isFalse();
+            verify(letterRepository, never()).deleteAll(any());
+        }
+
+        @Test
+        @DisplayName("삭제할 편지가 없어도 예외 없이 끝난다")
+        void empty() {
+            // given
+            given(letterRepository.findAllBySenderIdAndDeletedBySenderFalse(SENDER_ID)).willReturn(List.of());
+
+            // when
+            letterService.deleteAllSentLetters(SENDER_ID);
+
+            // then
+            verify(letterRepository).findAllBySenderIdAndDeletedBySenderFalse(SENDER_ID);
         }
     }
 }
