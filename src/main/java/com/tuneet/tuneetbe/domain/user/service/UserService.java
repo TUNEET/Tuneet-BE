@@ -15,6 +15,7 @@ import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SettingsUpdateRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SignUpRequest;
+import com.tuneet.tuneetbe.domain.user.dto.response.BlockedUserListResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.EmailAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.GenreReplaceResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.MyProfileResponse;
@@ -25,7 +26,9 @@ import com.tuneet.tuneetbe.domain.user.dto.response.SignUpResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.UserProfileResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.entity.UserArtist;
+import com.tuneet.tuneetbe.domain.user.entity.UserBlock;
 import com.tuneet.tuneetbe.domain.user.entity.UserGenre;
+import com.tuneet.tuneetbe.domain.user.enums.BlockType;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserArtistRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserBlockRepository;
@@ -477,5 +480,85 @@ public class UserService {
 
         // 로그 출력
         log.info("[UserService] 회원탈퇴 성공: userId = {}", userId);
+    }
+
+    // 사용자 차단
+    @Transactional
+    public void blockUser(Long userId, Long blockedUserId) {
+
+        // 본인을 차단하는지 확인
+        if (userId.equals(blockedUserId)) {
+            log.warn("[UserService] 사용자 본인은 차단할 수 없습니다.");
+            throw new CustomException(UserErrorCode.SELF_BLOCK_NOT_ALLOWED);
+        }
+
+        // 로그인한 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 차단할 사용자 조회
+        User blocked = userRepository.findById(blockedUserId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 탈퇴한 사용자인지 확인
+        if (blocked.isDeleted()) {
+            log.warn("[UserService] 이미 탈퇴한 사용자입니다.");
+            throw new CustomException(UserErrorCode.USER_NOT_FOUND);
+        }
+
+        // 이미 차단했는지 확인
+        if (userBlockRepository.existsByBlockerIdAndBlockedId(userId, blockedUserId)) {
+            log.warn("[UserService] 이미 차단한 사용자입니다.");
+            throw new CustomException(UserErrorCode.ALREADY_BLOCKED);
+        }
+
+        // DB 저장
+        userBlockRepository.save(UserBlock.builder()
+                .blocker(user)
+                .blocked(blocked)
+                .type(BlockType.BLOCK)
+                .build());
+
+        // 로그 출력
+        log.info("[UserService] 사용자 차단 성공: blockerId = {}, blockedId = {}", userId, blockedUserId);
+    }
+
+    // 사용자 차단 해제
+    @Transactional
+    public void unblockUser(Long userId, Long blockedUserId) {
+
+        // 내가 차단한 기록 조회
+        UserBlock userBlock = userBlockRepository.findByBlockerIdAndBlockedId(userId, blockedUserId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.BLOCK_NOT_FOUND));
+
+        // DB 삭제
+        userBlockRepository.delete(userBlock);
+
+        // 로그 출력
+        log.info("[UserService] 사용자 차단 해제 성공: blockerId = {}, blockedId = {}", userId, blockedUserId);
+    }
+
+    // 차단한 사용자 목록 조회
+    public BlockedUserListResponse getBlockedUsers(Long userId) {
+
+        // 내가 차단한 기록을 최근 차단순으로 조회
+        List<UserBlock> userBlocks = userBlockRepository.findAllByBlockerIdOrderByIdDesc(userId);
+
+        // 응답 목록 세팅
+        List<BlockedUserListResponse.BlockedUser> blockedUsers = new ArrayList<>();
+        for (UserBlock userBlock : userBlocks) {
+            User blocked = userBlock.getBlocked();
+            blockedUsers.add(BlockedUserListResponse.BlockedUser.builder()
+                    .userId(blocked.getId())
+                    .nickname(blocked.getNickname())
+                    .profilePicture(blocked.getProfilePicture())
+                    .blockedAt(userBlock.getCreatedAt())
+                    .build());
+        }
+
+        // 응답 반환
+        return BlockedUserListResponse.builder()
+                .blockedUsers(blockedUsers)
+                .build();
     }
 }

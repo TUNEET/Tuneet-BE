@@ -3,6 +3,7 @@ package com.tuneet.tuneetbe.domain.user.entity;
 import com.tuneet.tuneetbe.domain.user.enums.BlockType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
@@ -37,4 +38,11 @@ public class UserBlock {
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt; // 차단 일시
+
+    @Builder
+    private UserBlock(User blocker, User blocked, BlockType type) {
+        this.blocker = blocker;
+        this.blocked = blocked;
+        this.type = type;
+    }
 }

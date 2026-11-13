@@ -8,6 +8,7 @@ import com.tuneet.tuneetbe.domain.user.dto.request.ProfileMusicUpdateRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SettingsUpdateRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SignUpRequest;
 import com.tuneet.tuneetbe.domain.user.dto.response.ArtistReplaceResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.BlockedUserListResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.EmailAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.GenreReplaceResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.MusicReplaceResponse;
@@ -223,5 +224,46 @@ public class UserController {
 
         // 응답 반환
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "회원탈퇴 성공", null));
+    }
+
+    // 사용자 차단
+    @Operation(summary = "사용자 차단", description = "로그인한 사용자가 다른 사용자를 차단하는 API (서로 피드 조회, 편지 발송 불가)")
+    @PostMapping("/users/me/blocks/{user-id}")
+    public ResponseEntity<BaseResponse<Void>> blockUser(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("user-id") Long blockedUserId) {
+
+        // service 호출
+        userService.blockUser(userDetails.getUserId(), blockedUserId);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(201, "사용자 차단 성공", null));
+    }
+
+    // 사용자 차단 해제
+    @Operation(summary = "사용자 차단 해제", description = "로그인한 사용자가 차단한 사용자의 차단을 해제하는 API")
+    @DeleteMapping("/users/me/blocks/{user-id}")
+    public ResponseEntity<BaseResponse<Void>> unblockUser(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("user-id") Long blockedUserId) {
+
+        // service 호출
+        userService.unblockUser(userDetails.getUserId(), blockedUserId);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "사용자 차단 해제 성공", null));
+    }
+
+    // 차단한 사용자 목록 조회
+    @Operation(summary = "차단한 사용자 목록 조회", description = "로그인한 사용자가 차단한 사용자 목록을 최근 차단순으로 조회하는 API")
+    @GetMapping("/users/me/blocks")
+    public ResponseEntity<BaseResponse<BlockedUserListResponse>> getBlockedUsers(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+
+        // service 호출
+        BlockedUserListResponse response = userService.getBlockedUsers(userDetails.getUserId());
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "차단한 사용자 목록 조회 성공", response));
     }
 }
