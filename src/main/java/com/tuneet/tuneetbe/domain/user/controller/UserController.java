@@ -4,6 +4,7 @@ import com.tuneet.tuneetbe.domain.user.dto.request.ArtistReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.MusicReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
+import com.tuneet.tuneetbe.domain.user.dto.request.ProfileMusicUpdateRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SettingsUpdateRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.SignUpRequest;
 import com.tuneet.tuneetbe.domain.user.dto.response.ArtistReplaceResponse;
@@ -13,6 +14,7 @@ import com.tuneet.tuneetbe.domain.user.dto.response.MusicReplaceResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.MyProfileResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.NicknameAvailabilityResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.ProfileAddResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.ProfileMusicUpdateResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.SettingsResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.SignUpResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.UserProfileResponse;
@@ -153,6 +155,20 @@ public class UserController {
 
         // 응답 반환
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "선호 아티스트 교체 성공", response));
+    }
+
+    // 프로필 음악 설정
+    @Operation(summary = "프로필 음악 설정", description = "로그인한 사용자의 프로필 음악(나를 닮은 음악)을 설정하는 API")
+    @PutMapping("/users/me/profile-music")
+    public ResponseEntity<BaseResponse<ProfileMusicUpdateResponse>> updateProfileMusic(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody ProfileMusicUpdateRequest request) {
+
+        // service 호출
+        ProfileMusicUpdateResponse response = userTasteService.updateProfileMusic(userDetails.getUserId(), request);
+
+        // 응답 반환
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success(200, "프로필 음악 설정 성공", response));
     }
 
     // 설정 조회

@@ -7,8 +7,10 @@ import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.music.service.MusicCatalogService;
 import com.tuneet.tuneetbe.domain.user.dto.request.ArtistReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.MusicReplaceRequest;
+import com.tuneet.tuneetbe.domain.user.dto.request.ProfileMusicUpdateRequest;
 import com.tuneet.tuneetbe.domain.user.dto.response.ArtistReplaceResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.MusicReplaceResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.ProfileMusicUpdateResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.entity.UserArtist;
 import com.tuneet.tuneetbe.domain.user.entity.UserMusic;
@@ -89,6 +91,18 @@ public class UserTasteService {
         log.info("[UserTasteService] 선호 아티스트 교체 성공: userId = {}", userId);
         return ArtistReplaceResponse.builder()
                 .artists(artists.stream().map(this::toArtistResponse).toList())
+                .build();
+    }
+
+    // 프로필 음악 설정
+    public ProfileMusicUpdateResponse updateProfileMusic(Long userId, ProfileMusicUpdateRequest request) {
+        Music music = musicCatalogService.getOrCreateMusics(List.of(request.getMusicId())).getFirst();
+
+        transactionTemplate.executeWithoutResult(status -> findUserForUpdate(userId).updateProfileMusic(music));
+
+        log.info("[UserTasteService] 프로필 음악 설정 성공: userId = {}", userId);
+        return ProfileMusicUpdateResponse.builder()
+                .profileMusic(toMusicResponse(music))
                 .build();
     }
 

@@ -2,7 +2,9 @@ package com.tuneet.tuneetbe.domain.user.service;
 
 import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
+import com.tuneet.tuneetbe.domain.music.entity.Artist;
 import com.tuneet.tuneetbe.domain.music.entity.Genre;
+import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.music.enums.GenreType;
 import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
 import com.tuneet.tuneetbe.domain.notification.repository.DeviceTokenRepository;
@@ -20,6 +22,7 @@ import com.tuneet.tuneetbe.domain.user.dto.response.ProfileAddResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.SettingsResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.UserProfileResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
+import com.tuneet.tuneetbe.domain.user.entity.UserArtist;
 import com.tuneet.tuneetbe.domain.user.entity.UserGenre;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserArtistRepository;
@@ -127,6 +130,22 @@ class UserServiceTest {
         return genre;
     }
 
+    private Music music(String externalId, String canonicalId) {
+        Music music = BeanUtils.instantiateClass(Music.class);
+        ReflectionTestUtils.setField(music, "externalId", externalId);
+        ReflectionTestUtils.setField(music, "canonicalId", canonicalId);
+        ReflectionTestUtils.setField(music, "title", "제목");
+        return music;
+    }
+
+    private UserArtist userArtist(User user, Long artistId) {
+        Artist artist = BeanUtils.instantiateClass(Artist.class);
+        ReflectionTestUtils.setField(artist, "id", artistId);
+        ReflectionTestUtils.setField(artist, "externalId", "artist-" + artistId);
+        ReflectionTestUtils.setField(artist, "name", "가수" + artistId);
+        return UserArtist.builder().user(user).artist(artist).build();
+    }
+
     @Nested
     @DisplayName("다른 사용자 프로필 조회")
     class GetUserProfile {
@@ -149,6 +168,7 @@ class UserServiceTest {
             Genre rock = genre(10L, GenreType.ROCK);
 
             given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.of(targetUser));
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(loginUser));
             given(userGenreRepository.findAllByUserIdOrderByGenreDisplayOrderAsc(USER_ID))
                     .willReturn(List.of(userGenre(loginUser, kPop), userGenre(loginUser, rock)));
             given(userGenreRepository.findAllByUserIdOrderByGenreDisplayOrderAsc(TARGET_USER_ID))
@@ -179,6 +199,7 @@ class UserServiceTest {
             ReflectionTestUtils.setField(targetUser, "id", TARGET_USER_ID);
 
             given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.of(targetUser));
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(loginUser));
             given(userGenreRepository.findAllByUserIdOrderByGenreDisplayOrderAsc(USER_ID))
                     .willReturn(List.of(userGenre(loginUser, genre(10L, GenreType.ROCK))));
             given(userGenreRepository.findAllByUserIdOrderByGenreDisplayOrderAsc(TARGET_USER_ID))
@@ -190,6 +211,56 @@ class UserServiceTest {
             // then
             assertThat(response.getGenres()).hasSize(1);
             assertThat(response.getCommon().getGenres()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("상대의 프로필 음악과 좋아하는 아티스트, 함께 좋아하는 아티스트와 노래를 반환한다")
+        void musicAndArtists() {
+            // given
+            User loginUser = savedUser("나", null);
+            User targetUser = savedUser("산책하는 튜니", null);
+            ReflectionTestUtils.setField(targetUser, "id", TARGET_USER_ID);
+            loginUser.updateProfileMusic(music("recording-a", "song-1"));
+            targetUser.updateProfileMusic(music("recording-b", "song-1"));
+
+            given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.of(targetUser));
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(loginUser));
+            given(userArtistRepository.findAllByUserId(USER_ID))
+                    .willReturn(List.of(userArtist(loginUser, 2L), userArtist(loginUser, 9L)));
+            given(userArtistRepository.findAllWithArtistByUserIdOrderByIdAsc(TARGET_USER_ID))
+                    .willReturn(List.of(userArtist(targetUser, 1L), userArtist(targetUser, 2L)));
+
+            // when
+            UserProfileResponse response = userService.getUserProfile(USER_ID, TARGET_USER_ID);
+
+            // then
+            assertThat(response.getProfileMusic().getMusicId()).isEqualTo("recording-b");
+            assertThat(response.getFavoriteArtists()).extracting("artistId").containsExactly("artist-1", "artist-2");
+            assertThat(response.getCommon().getArtists()).extracting("artistId").containsExactly("artist-2");
+            assertThat(response.getCommon().getMusic().getMusicId()).isEqualTo("recording-b");
+        }
+
+        @Test
+        @DisplayName("프로필 음악이 다른 곡이거나 한쪽이 없으면 함께 좋아하는 노래는 null이다")
+        void differentProfileMusic() {
+            // given
+            User loginUser = savedUser("나", null);
+            User targetUser = savedUser("산책하는 튜니", null);
+            ReflectionTestUtils.setField(targetUser, "id", TARGET_USER_ID);
+            loginUser.updateProfileMusic(music("recording-a", "song-1"));
+            targetUser.updateProfileMusic(music("recording-c", "song-2"));
+            given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.of(targetUser));
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(loginUser));
+
+            // when
+            UserProfileResponse different = userService.getUserProfile(USER_ID, TARGET_USER_ID);
+            loginUser.updateProfileMusic(null);
+            UserProfileResponse loginNone = userService.getUserProfile(USER_ID, TARGET_USER_ID);
+
+            // then
+            assertThat(different.getProfileMusic().getMusicId()).isEqualTo("recording-c");
+            assertThat(different.getCommon().getMusic()).isNull();
+            assertThat(loginNone.getCommon().getMusic()).isNull();
         }
 
         @Test
@@ -754,6 +825,24 @@ class UserServiceTest {
             assertThat(response.getProfileMusic()).isNull();
             assertThat(response.getGenres()).isEmpty();
             assertThat(response.getFavoriteArtists()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("프로필 음악과 좋아하는 아티스트를 검색 결과와 같은 id로 반환한다")
+        void musicAndArtists() {
+            // given
+            User user = savedUser("튜니", null);
+            user.updateProfileMusic(music("recording-a", "song-1"));
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+            given(userArtistRepository.findAllWithArtistByUserIdOrderByIdAsc(USER_ID))
+                    .willReturn(List.of(userArtist(user, 3L), userArtist(user, 1L)));
+
+            // when
+            MyProfileResponse response = userService.getMyProfile(USER_ID);
+
+            // then
+            assertThat(response.getProfileMusic().getMusicId()).isEqualTo("recording-a");
+            assertThat(response.getFavoriteArtists()).extracting("artistId").containsExactly("artist-3", "artist-1");
         }
 
         @Test

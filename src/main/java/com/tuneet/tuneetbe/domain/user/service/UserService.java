@@ -2,8 +2,11 @@ package com.tuneet.tuneetbe.domain.user.service;
 
 import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
+import com.tuneet.tuneetbe.domain.music.dto.response.ArtistResponse;
 import com.tuneet.tuneetbe.domain.music.dto.response.GenreResponse;
+import com.tuneet.tuneetbe.domain.music.dto.response.MusicResponse;
 import com.tuneet.tuneetbe.domain.music.entity.Genre;
+import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
 import com.tuneet.tuneetbe.domain.notification.repository.DeviceTokenRepository;
 import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository;
@@ -21,6 +24,7 @@ import com.tuneet.tuneetbe.domain.user.dto.response.SettingsResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.SignUpResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.UserProfileResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
+import com.tuneet.tuneetbe.domain.user.entity.UserArtist;
 import com.tuneet.tuneetbe.domain.user.entity.UserGenre;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserArtistRepository;
@@ -185,11 +189,9 @@ public class UserService {
                 .userId(user.getId())
                 .nickname(user.getNickname())
                 .profilePicture(user.getProfilePicture())
-                // TODO: 음악 데이터 연동 후 프로필 음악 조회
-                .profileMusic(null)
+                .profileMusic(toMusicResponse(user.getProfileMusic()))
                 .genres(genreResponses)
-                // TODO: 음악 데이터 연동 후 좋아하는 아티스트 조회
-                .favoriteArtists(List.of())
+                .favoriteArtists(toArtistResponses(userArtistRepository.findAllWithArtistByUserIdOrderByIdAsc(userId)))
                 .build();
     }
 
@@ -313,6 +315,20 @@ public class UserService {
                 .build();
     }
 
+    // 음악을 응답 dto로 변환 (없으면 null)
+    private MusicResponse toMusicResponse(Music music) {
+        return music == null ? null : MusicResponse.from(music);
+    }
+
+    // 좋아하는 아티스트 목록을 응답 dto 목록으로 변환
+    private List<ArtistResponse> toArtistResponses(List<UserArtist> userArtists) {
+        List<ArtistResponse> artistResponses = new ArrayList<>();
+        for (UserArtist userArtist : userArtists) {
+            artistResponses.add(ArtistResponse.from(userArtist.getArtist()));
+        }
+        return artistResponses;
+    }
+
     // User 엔티티를 설정 응답 dto로 변환
     private SettingsResponse toSettingsResponse(User user) {
 
@@ -367,12 +383,36 @@ public class UserService {
             }
         }
 
+        // 로그인한 사용자의 좋아하는 아티스트 id 조회
+        Set<Long> loginUserArtistIds = new HashSet<>();
+        for (UserArtist userArtist : userArtistRepository.findAllByUserId(loginUserId)) {
+            loginUserArtistIds.add(userArtist.getArtist().getId());
+        }
+
+        // 조회할 사용자의 좋아하는 아티스트와 함께 좋아하는 아티스트 세팅
+        List<UserArtist> targetUserArtists = userArtistRepository.findAllWithArtistByUserIdOrderByIdAsc(targetUserId);
+        List<UserArtist> commonUserArtists = new ArrayList<>();
+        for (UserArtist userArtist : targetUserArtists) {
+            if (loginUserArtistIds.contains(userArtist.getArtist().getId())) {
+                commonUserArtists.add(userArtist);
+            }
+        }
+
+        // 프로필 음악이 같은 곡이면 함께 좋아하는 노래로 세팅 (같은 곡의 다른 음원도 같은 곡으로 봄)
+        User loginUser = userRepository.findById(loginUserId)
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+        Music targetProfileMusic = targetUser.getProfileMusic();
+        Music loginProfileMusic = loginUser.getProfileMusic();
+        Music commonMusic = null;
+        if (targetProfileMusic != null && loginProfileMusic != null
+                && targetProfileMusic.getCanonicalId().equals(loginProfileMusic.getCanonicalId())) {
+            commonMusic = targetProfileMusic;
+        }
+
         // 함께 좋아하는 항목 세팅
         UserProfileResponse.Common common = UserProfileResponse.Common.builder()
-                // TODO: 음악 데이터 연동 후 함께 좋아하는 아티스트 조회
-                .artists(List.of())
-                // TODO: 음악 데이터 연동 후 프로필 음악이 같으면 함께 좋아하는 노래로 조회
-                .music(null)
+                .artists(toArtistResponses(commonUserArtists))
+                .music(toMusicResponse(commonMusic))
                 .genres(commonGenreResponses)
                 .build();
 
@@ -381,11 +421,9 @@ public class UserService {
                 .userId(targetUser.getId())
                 .nickname(targetUser.getNickname())
                 .profilePicture(targetUser.getProfilePicture())
-                // TODO: 음악 데이터 연동 후 프로필 음악 조회
-                .profileMusic(null)
+                .profileMusic(toMusicResponse(targetProfileMusic))
                 .genres(genreResponses)
-                // TODO: 음악 데이터 연동 후 좋아하는 아티스트 조회
-                .favoriteArtists(List.of())
+                .favoriteArtists(toArtistResponses(targetUserArtists))
                 // TODO: 매칭 구현 후 유사도 계산
                 .similarity(null)
                 // TODO: 위치 갱신 구현 후 거리 계산 (위치 노출을 끈 사용자는 null)

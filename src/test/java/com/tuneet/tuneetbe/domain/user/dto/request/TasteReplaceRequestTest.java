@@ -45,6 +45,16 @@ class TasteReplaceRequestTest {
     }
 
     @Test
+    @DisplayName("프로필 음악 id가 없거나 형식이 다르면 검증에 실패한다")
+    void profileMusicIdRejectsInvalid() {
+        assertThat(messages(validator.validate(new ProfileMusicUpdateRequest(null))))
+                .containsExactly("노래는 필수 입력값입니다.");
+        assertThat(messages(validator.validate(new ProfileMusicUpdateRequest("12"))))
+                .containsExactly("올바른 노래 id가 아닙니다.");
+        assertThat(validator.validate(new ProfileMusicUpdateRequest(ID_1))).isEmpty();
+    }
+
+    @Test
     @DisplayName("올바른 ID 목록은 검증을 통과한다")
     void validIds() {
         assertThat(validator.validate(new MusicReplaceRequest(ids(ID_1)))).isEmpty();

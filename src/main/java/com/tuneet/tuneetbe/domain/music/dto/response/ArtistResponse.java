@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.music.dto.response;
 
+import com.tuneet.tuneetbe.domain.music.entity.Artist;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,4 +22,12 @@ public class ArtistResponse {
 
     @Schema(description = "아티스트 이미지 url", example = "https://...")
     private String artistImage;
+
+    public static ArtistResponse from(Artist artist) {
+        return ArtistResponse.builder()
+                .artistId(artist.getExternalId())
+                .name(artist.getName())
+                .artistImage(artist.getArtistImage())
+                .build();
+    }
 }
