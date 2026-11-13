@@ -494,7 +494,7 @@ class RoomServiceTest {
             given(roomUserRepository.findAllByRoomOrderByIdAsc(room)).willReturn(members);
             given(roomPostRepository.findTop2ByRoomOrderByCreatedAtDescIdDesc(room))
                     .willReturn(List.of(post(20L, user(2L, "방장"), music, "요즘 계속 듣는 노래")));
-            given(roomPlaylistRepository.findTop2ByRoomOrderByPositionAsc(room))
+            given(roomPlaylistRepository.findTop2ByRoomOrderByPositionAscIdAsc(room))
                     .willReturn(List.of(playlist(30L, music, 1)));
 
             // when
@@ -539,7 +539,7 @@ class RoomServiceTest {
             given(roomUserRepository.findAllByRoomOrderByIdAsc(room))
                     .willReturn(List.of(member(room, 10L, user(USER_ID, "나"), RoomRole.OWNER)));
             given(roomPostRepository.findTop2ByRoomOrderByCreatedAtDescIdDesc(room)).willReturn(List.of());
-            given(roomPlaylistRepository.findTop2ByRoomOrderByPositionAsc(room)).willReturn(List.of());
+            given(roomPlaylistRepository.findTop2ByRoomOrderByPositionAscIdAsc(room)).willReturn(List.of());
 
             // when
             RoomHomeResponse response = roomService.getRoomHome(ROOM_ID, USER_ID);
@@ -579,7 +579,7 @@ class RoomServiceTest {
                     .extracting("errorCode")
                     .isEqualTo(RoomErrorCode.NOT_ROOM_MEMBER);
             verify(roomPostRepository, never()).findTop2ByRoomOrderByCreatedAtDescIdDesc(any());
-            verify(roomPlaylistRepository, never()).findTop2ByRoomOrderByPositionAsc(any());
+            verify(roomPlaylistRepository, never()).findTop2ByRoomOrderByPositionAscIdAsc(any());
         }
     }
 

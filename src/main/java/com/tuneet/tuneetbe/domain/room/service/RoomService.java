@@ -161,7 +161,7 @@ public class RoomService {
         List<RoomPost> roomPostList = roomPostRepository.findTop2ByRoomOrderByCreatedAtDescIdDesc(room);
 
         // 플레이리스트 불러오기
-        List<RoomPlaylist> roomPlaylistList = roomPlaylistRepository.findTop2ByRoomOrderByPositionAsc(room);
+        List<RoomPlaylist> roomPlaylistList = roomPlaylistRepository.findTop2ByRoomOrderByPositionAscIdAsc(room);
 
         return generateRoomHomeResponse(room, myRoomUser.getRole(), roomUserList, roomPostList, roomPlaylistList, userId);
 
