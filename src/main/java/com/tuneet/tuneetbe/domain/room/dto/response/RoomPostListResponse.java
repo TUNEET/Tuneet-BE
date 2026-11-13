@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.domain.Slice;
 
 import java.util.List;
+import java.util.Set;
 
 @Getter
 @Builder
@@ -23,10 +24,10 @@ public class RoomPostListResponse {
     @Schema(description = "다음 포스트 존재 여부", example = "true")
     private Boolean hasNext;
 
-    public static RoomPostListResponse from(Slice<RoomPost> posts, Long userId) {
+    public static RoomPostListResponse from(Slice<RoomPost> posts, Long userId, Set<Long> roomUserIds) {
         return RoomPostListResponse.builder()
                 .roomPosts(posts.getContent().stream()
-                        .map(roomPost -> RoomPostResponse.from(roomPost, userId))
+                        .map(roomPost -> RoomPostResponse.from(roomPost, userId, roomUserIds))
                         .toList())
                 .hasNext(posts.hasNext())
                 .build();

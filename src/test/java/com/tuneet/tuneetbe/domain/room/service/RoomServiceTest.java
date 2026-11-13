@@ -80,6 +80,12 @@ class RoomServiceTest {
     @Mock
     private RoomPlaylistRepository roomPlaylistRepository;
 
+    @Mock
+    private RoomMemberReader roomMemberReader;
+
+    @Mock
+    private RoomRemover roomRemover;
+
     @InjectMocks
     private RoomService roomService;
 
@@ -716,5 +722,91 @@ class RoomServiceTest {
         ReflectionTestUtils.setField(playlist, "music", music);
         ReflectionTestUtils.setField(playlist, "position", position);
         return playlist;
+    }
+
+    @Nested
+    @DisplayName("방 나가기")
+    class LeaveRoom {
+
+        @Test
+        @DisplayName("방 멤버면 내 멤버 정보로 방을 나간다")
+        void leave() {
+            // given
+            RoomUser me = roomUser(ROOM_ID, "퇴근길 플리 모임", RoomRole.MEMBER);
+            given(roomMemberReader.getMember(ROOM_ID, USER_ID)).willReturn(me);
+
+            // when
+            roomService.leaveRoom(ROOM_ID, USER_ID);
+
+            // then
+            verify(roomRemover).leaveRoom(me);
+        }
+
+        @Test
+        @DisplayName("방 멤버가 아니면 NOT_ROOM_MEMBER 예외가 발생하고 나가지 않는다")
+        void notMember() {
+            // given
+            given(roomMemberReader.getMember(ROOM_ID, USER_ID))
+                    .willThrow(new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
+
+            // when & then
+            assertThatThrownBy(() -> roomService.leaveRoom(ROOM_ID, USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(RoomErrorCode.NOT_ROOM_MEMBER);
+
+            verify(roomRemover, never()).leaveRoom(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("방 삭제")
+    class DeleteRoom {
+
+        @Test
+        @DisplayName("방장이면 방을 삭제한다")
+        void owner() {
+            // given
+            given(roomMemberReader.getMember(ROOM_ID, USER_ID))
+                    .willReturn(roomUser(ROOM_ID, "퇴근길 플리 모임", RoomRole.OWNER));
+
+            // when
+            roomService.deleteRoom(ROOM_ID, USER_ID);
+
+            // then
+            verify(roomRemover).deleteRoom(ROOM_ID);
+        }
+
+        @Test
+        @DisplayName("방장이 아니면 ROOM_OWNER_ONLY 예외가 발생하고 삭제하지 않는다")
+        void notOwner() {
+            // given
+            given(roomMemberReader.getMember(ROOM_ID, USER_ID))
+                    .willReturn(roomUser(ROOM_ID, "퇴근길 플리 모임", RoomRole.MEMBER));
+
+            // when & then
+            assertThatThrownBy(() -> roomService.deleteRoom(ROOM_ID, USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(RoomErrorCode.ROOM_OWNER_ONLY);
+
+            verify(roomRemover, never()).deleteRoom(any());
+        }
+
+        @Test
+        @DisplayName("방이 없으면 ROOM_NOT_FOUND 예외가 발생하고 삭제하지 않는다")
+        void roomNotFound() {
+            // given
+            given(roomMemberReader.getMember(ROOM_ID, USER_ID))
+                    .willThrow(new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
+
+            // when & then
+            assertThatThrownBy(() -> roomService.deleteRoom(ROOM_ID, USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(RoomErrorCode.ROOM_NOT_FOUND);
+
+            verify(roomRemover, never()).deleteRoom(any());
+        }
     }
 }

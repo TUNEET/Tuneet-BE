@@ -27,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +44,8 @@ public class RoomService {
     private final InviteCodeGenerator inviteCodeGenerator;
     private final RoomPostRepository roomPostRepository;
     private final RoomPlaylistRepository roomPlaylistRepository;
+    private final RoomMemberReader roomMemberReader;
+    private final RoomRemover roomRemover;
 
     private static final Comparator<RoomUser> OWNER_FIRST =
             Comparator.comparing((RoomUser ru) -> ru.getRole() != RoomRole.OWNER)
@@ -196,6 +200,37 @@ public class RoomService {
 
     }
 
+    // 방 나가기
+    @Transactional
+    public void leaveRoom(Long roomId, Long userId) {
+
+        // 1. 방 멤버 검사 + 내 역할 탐색
+        RoomUser me = roomMemberReader.getMember(roomId, userId);
+
+        // 2. 나가기 (방장이면 가장 먼저 참여한 멤버에게 위임, 다른 멤버가 없으면 방 삭제)
+        roomRemover.leaveRoom(me);
+
+        log.info("[RoomService] 방 나가기 성공: roomId = {}, userId = {}", roomId, userId);
+    }
+
+    // 방 삭제
+    @Transactional
+    public void deleteRoom(Long roomId, Long userId) {
+
+        // 1. 방 멤버 검사 + 내 역할 탐색
+        RoomUser me = roomMemberReader.getMember(roomId, userId);
+
+        // 2. 주인이 아니라면 -> 삭제 불가
+        if (me.getRole() != RoomRole.OWNER) {
+            throw new CustomException(RoomErrorCode.ROOM_OWNER_ONLY);
+        }
+
+        // 3. 삭제
+        roomRemover.deleteRoom(roomId);
+
+        log.info("[RoomService] 방 삭제 성공: roomId = {}, userId = {}", roomId, userId);
+    }
+
     // 초대코드 생성
     private String generateInviteCode() {
         for (int i = 0; i < 5; i++) {
@@ -260,6 +295,11 @@ public class RoomService {
             List<RoomPlaylist> roomPlaylistList,
             Long userId
     ) {
+        // 나간 멤버 표시용
+        Set<Long> roomUserIds = roomUserList.stream()
+                .map(ru -> ru.getUser().getId())
+                .collect(Collectors.toSet());
+
         return RoomHomeResponse.builder()
                 .roomId(room.getId())
                 .roomTitle(room.getRoomTitle())
@@ -273,7 +313,7 @@ public class RoomService {
                         .sorted(OWNER_FIRST)
                         .map(RoomUserSummaryResponse::from)
                         .toList())
-                .roomPosts(roomPostList.stream().map(roomPost -> RoomPostResponse.from(roomPost, userId)).toList())
+                .roomPosts(roomPostList.stream().map(roomPost -> RoomPostResponse.from(roomPost, userId, roomUserIds)).toList())
                 .roomPlaylists(roomPlaylistList.stream().map(RoomPlaylistResponse::from).toList())
                 .build();
     }

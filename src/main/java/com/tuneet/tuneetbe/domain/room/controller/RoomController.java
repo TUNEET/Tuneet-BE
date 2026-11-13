@@ -85,4 +85,28 @@ public class RoomController {
                 .status(HttpStatus.OK)
                 .body(BaseResponse.success(200, "방 유저 목록 조회 성공", roomUserListResponse));
     }
+
+    @Operation(summary = "방 나가기", description = "방에서 나가는 API. 방장이 나가면 가장 먼저 참여한 멤버에게 방장을 넘기고, 다른 멤버가 없으면 방을 삭제한다. 내가 올린 포스트와 플레이리스트 곡은 남는다. 오류: R4001 존재하지 않는 방, R4004 방 멤버 아님")
+    @DeleteMapping("/{room-id}/users/me")
+    public ResponseEntity<BaseResponse<Void>> leaveRoom(@AuthenticationPrincipal CustomUserDetails customUserDetails,
+                                                        @PathVariable("room-id") Long roomId) {
+
+        roomService.leaveRoom(roomId, customUserDetails.getUserId());
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(BaseResponse.success(200, "방 나가기 성공", null));
+    }
+
+    @Operation(summary = "방 삭제", description = "방과 방의 포스트, 플레이리스트, 멤버 정보를 모두 삭제하는 API. 방장만 가능. 오류: R4001 존재하지 않는 방, R4004 방 멤버 아님, R4010 방장 아님")
+    @DeleteMapping("/{room-id}")
+    public ResponseEntity<BaseResponse<Void>> deleteRoom(@AuthenticationPrincipal CustomUserDetails customUserDetails,
+                                                         @PathVariable("room-id") Long roomId) {
+
+        roomService.deleteRoom(roomId, customUserDetails.getUserId());
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(BaseResponse.success(200, "방 삭제 성공", null));
+    }
 }

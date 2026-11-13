@@ -7,6 +7,7 @@ import com.tuneet.tuneetbe.domain.room.entity.Room;
 import com.tuneet.tuneetbe.domain.room.entity.RoomPost;
 import com.tuneet.tuneetbe.domain.room.exception.RoomErrorCode;
 import com.tuneet.tuneetbe.domain.room.repository.RoomPostRepository;
+import com.tuneet.tuneetbe.domain.room.repository.RoomUserRepository;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
@@ -28,6 +29,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -55,11 +57,18 @@ class RoomPostServiceTest {
     @Mock
     private RoomMemberReader roomMemberReader;
 
+    @Mock
+    private RoomUserRepository roomUserRepository;
+
     @InjectMocks
     private RoomPostService roomPostService;
 
     private void givenMember() {
         given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID)).willReturn(room());
+    }
+
+    private void givenRoomUsers(Long... userIds) {
+        given(roomUserRepository.findUserIdsByRoomId(ROOM_ID)).willReturn(Set.of(userIds));
     }
 
     @Nested
@@ -115,6 +124,35 @@ class RoomPostServiceTest {
         }
 
         @Test
+        @DisplayName("탈퇴한 사용자는 '탈퇴한 사용자', 방을 나간 멤버는 '나간 멤버'로 표시하고 프로필 사진을 숨긴다")
+        void deletedAndLeftWriter() {
+            // given
+            givenMember();
+            Pageable pageable = PageRequest.of(0, 20);
+            Music music = music(7L, "Hype Boy");
+            User deletedUser = user(3L, "탈퇴한 사람");
+            deletedUser.deleteUser(LocalDateTime.now());
+            List<RoomPost> posts = List.of(
+                    post(23L, deletedUser, music),
+                    post(22L, user(OTHER_USER_ID, "나간 사람"), music),
+                    post(21L, user(USER_ID, "나"), music));
+            given(roomPostRepository.findByRoomIdOrderByIdDesc(ROOM_ID, pageable))
+                    .willReturn(new SliceImpl<>(posts, pageable, false));
+            givenRoomUsers(USER_ID);
+
+            // when
+            RoomPostListResponse response = roomPostService.getRoomPostList(ROOM_ID, USER_ID, null, 20);
+
+            // then
+            assertThat(response.getRoomPosts())
+                    .extracting(RoomPostResponse::getNickname, RoomPostResponse::getProfilePicture)
+                    .containsExactly(
+                            tuple("탈퇴한 사용자", null),
+                            tuple("나간 멤버", null),
+                            tuple("나", "https://.../profile/1.png"));
+        }
+
+        @Test
         @DisplayName("방이 없으면 ROOM_NOT_FOUND 예외가 발생한다")
         void roomNotFound() {
             // given
@@ -165,6 +203,7 @@ class RoomPostServiceTest {
                     post(21L, user(USER_ID, "나"), music));
             given(roomPostRepository.findByRoomIdOrderByIdDesc(ROOM_ID, pageable))
                     .willReturn(new SliceImpl<>(posts, pageable, true));
+            givenRoomUsers(USER_ID, OTHER_USER_ID);
 
             // when
             RoomPostListResponse response = roomPostService.getRoomPostList(ROOM_ID, USER_ID, null, 2);
@@ -187,6 +226,7 @@ class RoomPostServiceTest {
             Pageable pageable = PageRequest.of(0, 2);
             given(roomPostRepository.findByRoomIdAndIdLessThanOrderByIdDesc(ROOM_ID, 21L, pageable))
                     .willReturn(new SliceImpl<>(List.of(post(20L, user(USER_ID, "나"), music(7L, "Hype Boy"))), pageable, false));
+            givenRoomUsers(USER_ID);
 
             // when
             RoomPostListResponse response = roomPostService.getRoomPostList(ROOM_ID, USER_ID, 21L, 2);
@@ -205,6 +245,7 @@ class RoomPostServiceTest {
             Pageable pageable = PageRequest.of(0, 20);
             given(roomPostRepository.findByRoomIdOrderByIdDesc(ROOM_ID, pageable))
                     .willReturn(new SliceImpl<>(List.of(), pageable, false));
+            givenRoomUsers(USER_ID);
 
             // when
             RoomPostListResponse response = roomPostService.getRoomPostList(ROOM_ID, USER_ID, null, 20);
