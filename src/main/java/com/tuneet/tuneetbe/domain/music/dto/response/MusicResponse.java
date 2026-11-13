@@ -14,8 +14,8 @@ import lombok.NoArgsConstructor;
 @Schema(title = "음악 응답 dto", description = "음악 정보")
 public class MusicResponse {
 
-    @Schema(description = "음악 고유번호", example = "1")
-    private Long musicId;
+    @Schema(description = "노래 검색 결과의 id", example = "27e95178-49ac-47a1-8b4c-540c77982680")
+    private String musicId;
 
     @Schema(description = "노래 제목", example = "노래 제목")
     private String title;
@@ -28,7 +28,7 @@ public class MusicResponse {
 
     public static MusicResponse from(Music music) {
         return MusicResponse.builder()
-                .musicId(music.getId())
+                .musicId(music.getExternalId())
                 .title(music.getTitle())
                 .artist(music.getArtist())
                 .musicPicture(music.getMusicPicture())
