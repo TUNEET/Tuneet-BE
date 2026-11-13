@@ -10,8 +10,6 @@ import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
 import com.tuneet.tuneetbe.domain.room.enums.RoomRole;
 import com.tuneet.tuneetbe.domain.room.exception.RoomErrorCode;
 import com.tuneet.tuneetbe.domain.room.repository.RoomPlaylistRepository;
-import com.tuneet.tuneetbe.domain.room.repository.RoomRepository;
-import com.tuneet.tuneetbe.domain.room.repository.RoomUserRepository;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
@@ -57,19 +55,20 @@ class RoomPlaylistServiceTest {
     private UserRepository userRepository;
 
     @Mock
-    private RoomRepository roomRepository;
-
-    @Mock
-    private RoomUserRepository roomUserRepository;
+    private RoomMemberReader roomMemberReader;
 
     @InjectMocks
     private RoomPlaylistService roomPlaylistService;
 
+    private Room givenRoomAsMember() {
+        Room room = room();
+        given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID)).willReturn(room);
+        return room;
+    }
+
     private Room givenMember(RoomRole role) {
         Room room = room();
-        given(roomRepository.existsById(ROOM_ID)).willReturn(true);
-        given(roomUserRepository.findByRoomIdAndUserId(ROOM_ID, USER_ID))
-                .willReturn(Optional.of(roomUser(room, user(USER_ID, "나"), role)));
+        given(roomMemberReader.getMember(ROOM_ID, USER_ID)).willReturn(roomUser(room, user(USER_ID, "나"), role));
         return room;
     }
 
@@ -84,7 +83,7 @@ class RoomPlaylistServiceTest {
             User user = user(USER_ID, "나");
             Music music = music(7L, "Hype Boy");
             given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
-            Room room = givenMember(RoomRole.MEMBER);
+            Room room = givenRoomAsMember();
             given(roomPlaylistRepository.existsByRoomAndMusic(room, music)).willReturn(false);
             given(roomPlaylistRepository.findMaxPosition(ROOM_ID)).willReturn(3);
             given(roomPlaylistRepository.saveAndFlush(any(RoomPlaylist.class))).willAnswer(invocation -> {
@@ -116,7 +115,7 @@ class RoomPlaylistServiceTest {
             // given
             Music music = music(7L, "Hype Boy");
             given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "나")));
-            Room room = givenMember(RoomRole.MEMBER);
+            Room room = givenRoomAsMember();
             given(roomPlaylistRepository.existsByRoomAndMusic(room, music)).willReturn(false);
             given(roomPlaylistRepository.findMaxPosition(ROOM_ID)).willReturn(0);
             given(roomPlaylistRepository.saveAndFlush(any(RoomPlaylist.class))).willAnswer(invocation -> invocation.getArgument(0));
@@ -134,7 +133,7 @@ class RoomPlaylistServiceTest {
             // given
             Music music = music(7L, "Hype Boy");
             given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "나")));
-            Room room = givenMember(RoomRole.MEMBER);
+            Room room = givenRoomAsMember();
             given(roomPlaylistRepository.existsByRoomAndMusic(room, music)).willReturn(true);
 
             // when & then
@@ -152,7 +151,7 @@ class RoomPlaylistServiceTest {
             // given
             Music music = music(7L, "Hype Boy");
             given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "나")));
-            Room room = givenMember(RoomRole.MEMBER);
+            Room room = givenRoomAsMember();
             given(roomPlaylistRepository.existsByRoomAndMusic(room, music)).willReturn(false);
             given(roomPlaylistRepository.findMaxPosition(ROOM_ID)).willReturn(3);
             given(roomPlaylistRepository.saveAndFlush(any(RoomPlaylist.class)))
@@ -185,7 +184,8 @@ class RoomPlaylistServiceTest {
         void roomNotFound() {
             // given
             given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "나")));
-            given(roomRepository.existsById(ROOM_ID)).willReturn(false);
+            given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID))
+                    .willThrow(new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
 
             // when & then
             assertThatThrownBy(() -> roomPlaylistService.createRoomPlaylist(ROOM_ID, USER_ID, music(7L, "Hype Boy")))
@@ -201,8 +201,8 @@ class RoomPlaylistServiceTest {
         void notMember() {
             // given
             given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "나")));
-            given(roomRepository.existsById(ROOM_ID)).willReturn(true);
-            given(roomUserRepository.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
+            given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID))
+                    .willThrow(new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
 
             // when & then
             assertThatThrownBy(() -> roomPlaylistService.createRoomPlaylist(ROOM_ID, USER_ID, music(7L, "Hype Boy")))
@@ -222,7 +222,7 @@ class RoomPlaylistServiceTest {
         @DisplayName("position 순으로 조회한 목록을 그대로 응답한다")
         void returnsInOrder() {
             // given
-            Room room = givenMember(RoomRole.MEMBER);
+            Room room = givenRoomAsMember();
             User user = user(USER_ID, "나");
             given(roomPlaylistRepository.findByRoomOrderByPositionAscIdAsc(room)).willReturn(List.of(
                     playlist(31L, room, user, music(7L, "Hype Boy"), 1),
@@ -241,8 +241,8 @@ class RoomPlaylistServiceTest {
         @DisplayName("방 멤버가 아니면 NOT_ROOM_MEMBER 예외가 발생하고 목록을 조회하지 않는다")
         void notMember() {
             // given
-            given(roomRepository.existsById(ROOM_ID)).willReturn(true);
-            given(roomUserRepository.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
+            given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID))
+                    .willThrow(new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
 
             // when & then
             assertThatThrownBy(() -> roomPlaylistService.getAllRoomPlaylists(ROOM_ID, USER_ID))
@@ -325,8 +325,8 @@ class RoomPlaylistServiceTest {
         @DisplayName("방 멤버가 아니면 NOT_ROOM_MEMBER 예외가 발생하고 곡을 조회하지 않는다")
         void notMember() {
             // given
-            given(roomRepository.existsById(ROOM_ID)).willReturn(true);
-            given(roomUserRepository.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
+            given(roomMemberReader.getMember(ROOM_ID, USER_ID))
+                    .willThrow(new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
 
             // when & then
             assertThatThrownBy(() -> roomPlaylistService.deleteRoomPlaylist(ROOM_ID, PLAYLIST_ID, USER_ID))
@@ -379,7 +379,7 @@ class RoomPlaylistServiceTest {
         @DisplayName("보낸 순서대로 position을 1부터 다시 매기고 바뀐 순서로 응답한다")
         void reorders() {
             // given
-            Room room = givenMember(RoomRole.MEMBER);
+            Room room = givenRoomAsMember();
             User user = user(USER_ID, "나");
             RoomPlaylist first = playlist(31L, room, user, music(7L, "Hype Boy"), 1);
             RoomPlaylist second = playlist(32L, room, user, music(8L, "Ditto"), 2);
@@ -403,7 +403,7 @@ class RoomPlaylistServiceTest {
         @DisplayName("겹친 position도 1부터 다시 매겨 정리한다")
         void fixesDuplicatedPositions() {
             // given
-            Room room = givenMember(RoomRole.MEMBER);
+            Room room = givenRoomAsMember();
             User user = user(USER_ID, "나");
             RoomPlaylist first = playlist(31L, room, user, music(7L, "Hype Boy"), 4);
             RoomPlaylist second = playlist(32L, room, user, music(8L, "Ditto"), 4);
@@ -440,8 +440,8 @@ class RoomPlaylistServiceTest {
         @DisplayName("방 멤버가 아니면 NOT_ROOM_MEMBER 예외가 발생하고 목록을 조회하지 않는다")
         void notMember() {
             // given
-            given(roomRepository.existsById(ROOM_ID)).willReturn(true);
-            given(roomUserRepository.findByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(Optional.empty());
+            given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID))
+                    .willThrow(new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
 
             // when & then
             assertThatThrownBy(() -> roomPlaylistService.updateRoomPlaylistPos(ROOM_ID, USER_ID, orderRequest(List.of(31L))))
@@ -454,7 +454,7 @@ class RoomPlaylistServiceTest {
 
         private void assertOrderMismatch(List<Long> ids) {
             // given
-            Room room = givenMember(RoomRole.MEMBER);
+            Room room = givenRoomAsMember();
             User user = user(USER_ID, "나");
             RoomPlaylist first = playlist(31L, room, user, music(7L, "Hype Boy"), 1);
             RoomPlaylist second = playlist(32L, room, user, music(8L, "Ditto"), 2);

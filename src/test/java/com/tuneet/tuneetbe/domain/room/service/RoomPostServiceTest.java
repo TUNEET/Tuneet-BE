@@ -7,8 +7,6 @@ import com.tuneet.tuneetbe.domain.room.entity.Room;
 import com.tuneet.tuneetbe.domain.room.entity.RoomPost;
 import com.tuneet.tuneetbe.domain.room.exception.RoomErrorCode;
 import com.tuneet.tuneetbe.domain.room.repository.RoomPostRepository;
-import com.tuneet.tuneetbe.domain.room.repository.RoomRepository;
-import com.tuneet.tuneetbe.domain.room.repository.RoomUserRepository;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
@@ -49,23 +47,19 @@ class RoomPostServiceTest {
     private static final Long POST_ID = 20L;
 
     @Mock
-    private RoomRepository roomRepository;
-
-    @Mock
     private RoomPostRepository roomPostRepository;
 
     @Mock
     private UserRepository userRepository;
 
     @Mock
-    private RoomUserRepository roomUserRepository;
+    private RoomMemberReader roomMemberReader;
 
     @InjectMocks
     private RoomPostService roomPostService;
 
     private void givenMember() {
-        given(roomRepository.findById(ROOM_ID)).willReturn(Optional.of(room()));
-        given(roomUserRepository.existsByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(true);
+        given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID)).willReturn(room());
     }
 
     @Nested
@@ -125,7 +119,8 @@ class RoomPostServiceTest {
         void roomNotFound() {
             // given
             given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "나")));
-            given(roomRepository.findById(ROOM_ID)).willReturn(Optional.empty());
+            given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID))
+                    .willThrow(new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
 
             // when & then
             assertThatThrownBy(() -> roomPostService.createRoomPost(ROOM_ID, USER_ID, music(7L, "Hype Boy"), "코멘트"))
@@ -141,8 +136,8 @@ class RoomPostServiceTest {
         void notMember() {
             // given
             given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "나")));
-            given(roomRepository.findById(ROOM_ID)).willReturn(Optional.of(room()));
-            given(roomUserRepository.existsByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(false);
+            given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID))
+                    .willThrow(new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
 
             // when & then
             assertThatThrownBy(() -> roomPostService.createRoomPost(ROOM_ID, USER_ID, music(7L, "Hype Boy"), "코멘트"))
@@ -223,7 +218,8 @@ class RoomPostServiceTest {
         @DisplayName("방이 없으면 ROOM_NOT_FOUND 예외가 발생한다")
         void roomNotFound() {
             // given
-            given(roomRepository.findById(ROOM_ID)).willReturn(Optional.empty());
+            given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID))
+                    .willThrow(new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
 
             // when & then
             assertThatThrownBy(() -> roomPostService.getRoomPostList(ROOM_ID, USER_ID, null, 20))
@@ -236,8 +232,8 @@ class RoomPostServiceTest {
         @DisplayName("방 멤버가 아니면 NOT_ROOM_MEMBER 예외가 발생하고 포스트를 조회하지 않는다")
         void notMember() {
             // given
-            given(roomRepository.findById(ROOM_ID)).willReturn(Optional.of(room()));
-            given(roomUserRepository.existsByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(false);
+            given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID))
+                    .willThrow(new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
 
             // when & then
             assertThatThrownBy(() -> roomPostService.getRoomPostList(ROOM_ID, USER_ID, null, 20))
@@ -305,8 +301,8 @@ class RoomPostServiceTest {
         @DisplayName("방 멤버가 아니면 NOT_ROOM_MEMBER 예외가 발생하고 포스트를 조회하지 않는다")
         void notMember() {
             // given
-            given(roomRepository.findById(ROOM_ID)).willReturn(Optional.of(room()));
-            given(roomUserRepository.existsByRoomIdAndUserId(ROOM_ID, USER_ID)).willReturn(false);
+            given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID))
+                    .willThrow(new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
 
             // when & then
             assertThatThrownBy(() -> roomPostService.deleteRoomPost(ROOM_ID, POST_ID, USER_ID))

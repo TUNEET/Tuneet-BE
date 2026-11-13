@@ -10,8 +10,6 @@ import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
 import com.tuneet.tuneetbe.domain.room.enums.RoomRole;
 import com.tuneet.tuneetbe.domain.room.exception.RoomErrorCode;
 import com.tuneet.tuneetbe.domain.room.repository.RoomPlaylistRepository;
-import com.tuneet.tuneetbe.domain.room.repository.RoomRepository;
-import com.tuneet.tuneetbe.domain.room.repository.RoomUserRepository;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
@@ -36,15 +34,14 @@ public class RoomPlaylistService {
 
     private final RoomPlaylistRepository roomPlaylistRepository;
     private final UserRepository userRepository;
-    private final RoomRepository roomRepository;
-    private final RoomUserRepository roomUserRepository;
+    private final RoomMemberReader roomMemberReader;
 
     @Transactional
     public RoomPlaylistResponse createRoomPlaylist(Long roomId, Long userId, Music music) {
 
         User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
-        Room room = getRoomAsMember(roomId, userId);
+        Room room = roomMemberReader.getRoomAsMember(roomId, userId);
 
         if (roomPlaylistRepository.existsByRoomAndMusic(room, music)) {
             throw new CustomException(RoomErrorCode.ROOM_PLAYLIST_DUPLICATE_MUSIC);
@@ -72,7 +69,7 @@ public class RoomPlaylistService {
 
     public RoomPlaylistListResponse getAllRoomPlaylists(Long roomId, Long userId) {
 
-        Room room = getRoomAsMember(roomId, userId);
+        Room room = roomMemberReader.getRoomAsMember(roomId, userId);
 
         List<RoomPlaylist> roomPlaylistList = roomPlaylistRepository.findByRoomOrderByPositionAscIdAsc(room);
 
@@ -83,7 +80,7 @@ public class RoomPlaylistService {
     public void deleteRoomPlaylist(Long roomId, Long roomPlaylistId, Long userId) {
 
         // 1. 방 멤버 검사 + 내 역할(Role) 탐색
-        RoomUser me = getRoomMember(roomId, userId);
+        RoomUser me = roomMemberReader.getMember(roomId, userId);
 
         // 2. 플레이리스트 원소 가져오기(만약 다른 방의 플레이리스트이거나, 아예 존재하지 않는다면 동일하게 NOTFOUND)
         RoomPlaylist roomPlaylist = roomPlaylistRepository.findByRoomAndId(me.getRoom(), roomPlaylistId)
@@ -101,7 +98,7 @@ public class RoomPlaylistService {
     public void deleteAllRoomPlaylists(Long roomId, Long userId) {
 
         // 1. 방 멤버 검사 + 내 역할 탐색
-        RoomUser me = getRoomMember(roomId, userId);
+        RoomUser me = roomMemberReader.getMember(roomId, userId);
 
         // 2. 주인이 아니라면 -> 삭제 불가
         if (me.getRole() != RoomRole.OWNER) {
@@ -116,7 +113,7 @@ public class RoomPlaylistService {
     public RoomPlaylistListResponse updateRoomPlaylistPos(Long roomId, Long userId, RoomPlaylistPosUpdateRequest request) {
 
         // 1. 방 멤버 검사
-        Room room = getRoomAsMember(roomId, userId);
+        Room room = roomMemberReader.getRoomAsMember(roomId, userId);
 
         // 2. 플레이리스트 원소 모두 가져오기
         // 업데이트가 항상 같은 순서로 나가도록 id 순으로 조회 (동시 순서 변경 데드락 방지)
@@ -137,19 +134,5 @@ public class RoomPlaylistService {
 
         roomPlaylistList.sort(Comparator.comparing(RoomPlaylist::getPosition));
         return RoomPlaylistListResponse.from(roomPlaylistList);
-    }
-
-    // 방이 있고 내가 멤버인지 확인
-    private Room getRoomAsMember(Long roomId, Long userId) {
-        return getRoomMember(roomId, userId).getRoom();
-    }
-
-    // 방이 있고 내가 멤버인지 확인 후 내 멤버 정보(역할 포함) 반환
-    private RoomUser getRoomMember(Long roomId, Long userId) {
-        if (!roomRepository.existsById(roomId)) {
-            throw new CustomException(RoomErrorCode.ROOM_NOT_FOUND);
-        }
-        return roomUserRepository.findByRoomIdAndUserId(roomId, userId)
-                .orElseThrow(() -> new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
     }
 }
