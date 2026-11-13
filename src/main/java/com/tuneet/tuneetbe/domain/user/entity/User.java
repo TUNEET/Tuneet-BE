@@ -89,6 +89,11 @@ public class User extends BaseTimeEntity {
         }
     }
 
+    // 프로필 음악 변경
+    public void updateProfileMusic(Music profileMusic) {
+        this.profileMusic = profileMusic;
+    }
+
     // 위치 노출과 편지 받기 변경 (null이면 유지)
     public void updateSettings(Boolean locationVisible, Boolean letterReceivable) {
         if (locationVisible != null) {

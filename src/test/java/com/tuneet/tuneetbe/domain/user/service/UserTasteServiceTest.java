@@ -6,8 +6,10 @@ import com.tuneet.tuneetbe.domain.music.exception.MusicErrorCode;
 import com.tuneet.tuneetbe.domain.music.service.MusicCatalogService;
 import com.tuneet.tuneetbe.domain.user.dto.request.ArtistReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.MusicReplaceRequest;
+import com.tuneet.tuneetbe.domain.user.dto.request.ProfileMusicUpdateRequest;
 import com.tuneet.tuneetbe.domain.user.dto.response.ArtistReplaceResponse;
 import com.tuneet.tuneetbe.domain.user.dto.response.MusicReplaceResponse;
+import com.tuneet.tuneetbe.domain.user.dto.response.ProfileMusicUpdateResponse;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.entity.UserArtist;
 import com.tuneet.tuneetbe.domain.user.entity.UserMusic;
@@ -28,6 +30,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -157,5 +160,65 @@ class UserTasteServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(UserErrorCode.USER_NOT_FOUND);
         verify(userArtistRepository, never()).deleteAllInBatch(any());
+    }
+
+    @Test
+    @DisplayName("프로필 음악을 설정하고 검색 결과와 같은 id로 돌려준다")
+    void updateProfileMusic() {
+        User user = user();
+        given(musicCatalogService.getOrCreateMusics(List.of("r5"))).willReturn(List.of(music(5)));
+        given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(user));
+
+        ProfileMusicUpdateResponse response = service.updateProfileMusic(USER_ID, new ProfileMusicUpdateRequest("r5"));
+
+        assertThat(user.getProfileMusic().getId()).isEqualTo(5L);
+        assertThat(response.getProfileMusic().getMusicId()).isEqualTo("music-5");
+    }
+
+    @Test
+    @DisplayName("곡 저장에 실패하면 프로필 음악을 바꾸지 않는다")
+    void keepsProfileMusicWhenCatalogFails() {
+        given(musicCatalogService.getOrCreateMusics(List.of("r404")))
+                .willThrow(new CustomException(MusicErrorCode.MUSIC_NOT_FOUND));
+
+        assertThatThrownBy(() -> service.updateProfileMusic(USER_ID, new ProfileMusicUpdateRequest("r404")))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(MusicErrorCode.MUSIC_NOT_FOUND);
+        verify(userRepository, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    @DisplayName("음악 API를 기다리는 사이 탈퇴한 사용자면 USER_NOT_FOUND 예외가 발생하고 취향을 저장하지 않는다")
+    void deletedUser() {
+        User user = user();
+        user.deleteUser(LocalDateTime.now());
+        given(musicCatalogService.getOrCreateMusics(List.of("r5"))).willReturn(List.of(music(5)));
+        given(musicCatalogService.getOrCreateMusics(ids("r5"))).willReturn(List.of(music(5)));
+        given(musicCatalogService.getOrCreateArtists(ids("a1", "a2", "a3"))).willReturn(List.of(artist(1), artist(2), artist(3)));
+        given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.updateProfileMusic(USER_ID, new ProfileMusicUpdateRequest("r5")))
+                .extracting("errorCode").isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        assertThatThrownBy(() -> service.replaceMusics(USER_ID, new MusicReplaceRequest(ids("r5"))))
+                .extracting("errorCode").isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        assertThatThrownBy(() -> service.replaceArtists(USER_ID, new ArtistReplaceRequest(ids("a1", "a2", "a3"))))
+                .extracting("errorCode").isEqualTo(UserErrorCode.USER_NOT_FOUND);
+
+        assertThat(user.getProfileMusic()).isNull();
+        verify(userMusicRepository, never()).saveAll(any());
+        verify(userArtistRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("프로필 음악 설정 시 사용자가 없으면 USER_NOT_FOUND 예외가 발생한다")
+    void updateProfileMusicUserNotFound() {
+        given(musicCatalogService.getOrCreateMusics(List.of("r5"))).willReturn(List.of(music(5)));
+        given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateProfileMusic(USER_ID, new ProfileMusicUpdateRequest("r5")))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(UserErrorCode.USER_NOT_FOUND);
     }
 }
