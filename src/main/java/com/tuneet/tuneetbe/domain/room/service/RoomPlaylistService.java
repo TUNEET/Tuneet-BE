@@ -109,7 +109,7 @@ public class RoomPlaylistService {
         }
 
         // 3. 삭제
-        roomPlaylistRepository.bulkDeleteByRoomId(roomId);
+        roomPlaylistRepository.deleteAllByRoomId(roomId);
     }
 
     @Transactional

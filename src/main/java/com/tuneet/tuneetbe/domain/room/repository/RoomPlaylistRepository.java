@@ -14,13 +14,10 @@ import java.util.Optional;
 
 public interface RoomPlaylistRepository extends JpaRepository<RoomPlaylist, Long> {
 
-    // 방의 플레이리스트 전체 삭제
-    void deleteAllByRoomId(Long roomId);
-
     // 방의 플레이리스트 전체 삭제 (쿼리 1번)
     @Modifying
     @Query("delete from RoomPlaylist rp where rp.room.id = :roomId")
-    void bulkDeleteByRoomId(@Param("roomId") Long roomId);
+    void deleteAllByRoomId(@Param("roomId") Long roomId);
 
     @EntityGraph(attributePaths = "music")
     List<RoomPlaylist> findTop2ByRoomOrderByPositionAscIdAsc(Room room);

@@ -352,7 +352,7 @@ class RoomPlaylistServiceTest {
             roomPlaylistService.deleteAllRoomPlaylists(ROOM_ID, USER_ID);
 
             // then
-            verify(roomPlaylistRepository).bulkDeleteByRoomId(ROOM_ID);
+            verify(roomPlaylistRepository).deleteAllByRoomId(ROOM_ID);
         }
 
         @Test
@@ -367,7 +367,7 @@ class RoomPlaylistServiceTest {
                     .extracting("errorCode")
                     .isEqualTo(RoomErrorCode.ROOM_OWNER_ONLY);
 
-            verify(roomPlaylistRepository, never()).bulkDeleteByRoomId(anyLong());
+            verify(roomPlaylistRepository, never()).deleteAllByRoomId(anyLong());
         }
     }
 
