@@ -432,6 +432,7 @@ public class UserService {
                 // TODO: 위치 갱신 구현 후 거리 계산 (위치 노출을 끈 사용자는 null)
                 .distanceRange(null)
                 .letterReceivable(targetUser.getLetterReceivable())
+                .isBlocked(userBlockRepository.existsByBlockerIdAndBlockedId(loginUserId, targetUserId))
                 .common(common)
                 .build();
     }

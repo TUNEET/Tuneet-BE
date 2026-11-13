@@ -191,6 +191,24 @@ class UserServiceTest {
                     .containsExactly(GenreType.K_POP);
             assertThat(response.getCommon().getArtists()).isEmpty();
             assertThat(response.getCommon().getMusic()).isNull();
+            assertThat(response.getIsBlocked()).isFalse();
+        }
+
+        @Test
+        @DisplayName("내가 차단한 사용자의 프로필이면 isBlocked가 true이다")
+        void blockedByMe() {
+            // given
+            User targetUser = savedUser("산책하는 튜니", null);
+            ReflectionTestUtils.setField(targetUser, "id", TARGET_USER_ID);
+            given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.of(targetUser));
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(savedUser("나", null)));
+            given(userBlockRepository.existsByBlockerIdAndBlockedId(USER_ID, TARGET_USER_ID)).willReturn(true);
+
+            // when
+            UserProfileResponse response = userService.getUserProfile(USER_ID, TARGET_USER_ID);
+
+            // then
+            assertThat(response.getIsBlocked()).isTrue();
         }
 
         @Test
