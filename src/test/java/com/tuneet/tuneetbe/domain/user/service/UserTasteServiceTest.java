@@ -30,6 +30,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -185,6 +186,28 @@ class UserTasteServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(MusicErrorCode.MUSIC_NOT_FOUND);
         verify(userRepository, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    @DisplayName("음악 API를 기다리는 사이 탈퇴한 사용자면 USER_NOT_FOUND 예외가 발생하고 취향을 저장하지 않는다")
+    void deletedUser() {
+        User user = user();
+        user.deleteUser(LocalDateTime.now());
+        given(musicCatalogService.getOrCreateMusics(List.of("r5"))).willReturn(List.of(music(5)));
+        given(musicCatalogService.getOrCreateMusics(ids("r5"))).willReturn(List.of(music(5)));
+        given(musicCatalogService.getOrCreateArtists(ids("a1", "a2", "a3"))).willReturn(List.of(artist(1), artist(2), artist(3)));
+        given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.updateProfileMusic(USER_ID, new ProfileMusicUpdateRequest("r5")))
+                .extracting("errorCode").isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        assertThatThrownBy(() -> service.replaceMusics(USER_ID, new MusicReplaceRequest(ids("r5"))))
+                .extracting("errorCode").isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        assertThatThrownBy(() -> service.replaceArtists(USER_ID, new ArtistReplaceRequest(ids("a1", "a2", "a3"))))
+                .extracting("errorCode").isEqualTo(UserErrorCode.USER_NOT_FOUND);
+
+        assertThat(user.getProfileMusic()).isNull();
+        verify(userMusicRepository, never()).saveAll(any());
+        verify(userArtistRepository, never()).saveAll(any());
     }
 
     @Test

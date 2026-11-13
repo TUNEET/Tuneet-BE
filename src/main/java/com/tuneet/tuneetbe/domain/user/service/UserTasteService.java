@@ -107,9 +107,14 @@ public class UserTasteService {
     }
 
     // 같은 사용자의 중복 요청이 순서대로 처리되도록 사용자 행을 잠그고 조회
+    // 음악 API를 기다리는 사이 탈퇴했으면 거부 (파기한 취향 정보가 다시 저장되지 않도록)
     private User findUserForUpdate(Long userId) {
-        return userRepository.findByIdForUpdate(userId)
+        User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+        if (user.isDeleted()) {
+            throw new CustomException(UserErrorCode.USER_NOT_FOUND);
+        }
+        return user;
     }
 
     private MusicResponse toMusicResponse(Music music) {
