@@ -21,4 +21,11 @@ public interface UserBlockRepository extends JpaRepository<UserBlock, Long> {
     // 내가 차단한 사용자 목록을 최근 차단순으로 차단된 사용자와 함께 조회
     @EntityGraph(attributePaths = "blocked")
     List<UserBlock> findAllByBlockerIdOrderByIdDesc(Long blockerId);
+
+    // 두 사용자 사이에 차단 기록이 있는지 확인 (A가 B를 차단했거나, B가 A를 차단한 경우 모두)
+    // (blocker = A and blocked = B) or (blocker = B and blocked = A) 로 조회 (And가 Or보다 먼저 묶임)
+    boolean existsByBlockerIdAndBlockedIdOrBlockerIdAndBlockedId(Long blockerId1, Long blockedId1, Long blockerId2, Long blockedId2);
+
+    // 내가 차단했거나 나를 차단한 기록 전체 조회 (피드 목록, 랜덤 편지 후보에서 제외할 사용자 찾기)
+    List<UserBlock> findAllByBlockerIdOrBlockedId(Long blockerId, Long blockedId);
 }

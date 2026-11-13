@@ -17,8 +17,11 @@ import com.tuneet.tuneetbe.domain.notification.enums.NotificationType;
 import com.tuneet.tuneetbe.domain.notification.event.PushEvent;
 import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository;
 import com.tuneet.tuneetbe.domain.user.entity.User;
+import com.tuneet.tuneetbe.domain.user.entity.UserBlock;
+import com.tuneet.tuneetbe.domain.user.enums.BlockType;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
+import com.tuneet.tuneetbe.domain.user.repository.UserBlockRepository;
 import com.tuneet.tuneetbe.global.exception.CustomException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -72,6 +75,9 @@ class FeedServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private UserBlockRepository userBlockRepository;
 
     @InjectMocks
     private FeedService feedService;
@@ -210,6 +216,21 @@ class FeedServiceTest {
         }
 
         @Test
+        @DisplayName("차단 관계인 사용자의 피드면 BLOCKED_USER 예외가 발생한다")
+        void blockedUserFeed() {
+            // given
+            given(feedRepository.findById(FEED_ID))
+                    .willReturn(Optional.of(savedFeed(FEED_ID, writer(OTHER_USER_ID, "산책하는 튜니", null))));
+            given(userBlockRepository.existsByBlockerIdAndBlockedIdOrBlockerIdAndBlockedId(USER_ID, OTHER_USER_ID, OTHER_USER_ID, USER_ID)).willReturn(true);
+
+            // when & then
+            assertThatThrownBy(() -> feedService.getFeed(USER_ID, FEED_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.BLOCKED_USER);
+        }
+
+        @Test
         @DisplayName("피드가 없으면 FEED_NOT_FOUND 예외가 발생한다")
         void feedNotFound() {
             // given
@@ -280,6 +301,45 @@ class FeedServiceTest {
             // then
             assertThat(response.getFeeds()).isEmpty();
             assertThat(response.getHasNext()).isFalse();
+        }
+
+        @Test
+        @DisplayName("차단 관계인 사용자가 있으면 내가 차단한 사용자와 나를 차단한 사용자의 피드를 빼고 조회한다")
+        void excludeBlockedUsers() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            User blockedByMe = writer(3L, "차단한 튜니", null);
+            User blockingMe = writer(4L, "나를 차단한 튜니", null);
+            given(userBlockRepository.findAllByBlockerIdOrBlockedId(USER_ID, USER_ID)).willReturn(List.of(
+                    UserBlock.builder().blocker(me).blocked(blockedByMe).type(BlockType.BLOCK).build(),
+                    UserBlock.builder().blocker(blockingMe).blocked(me).type(BlockType.BLOCK).build()));
+            given(feedRepository.findByUserIdNotInOrderByIdDesc(List.of(3L, 4L), pageable)).willReturn(
+                    new SliceImpl<>(List.of(savedFeed(2L, writer(OTHER_USER_ID, "산책하는 튜니", null))), pageable, false));
+
+            // when
+            FeedListResponse response = feedService.getFeeds(USER_ID, null, SIZE);
+
+            // then
+            assertThat(response.getFeeds()).extracting("feedId").containsExactly(2L);
+            verify(feedRepository, never()).findAllByOrderByIdDesc(any());
+        }
+
+        @Test
+        @DisplayName("차단 관계인 사용자가 있고 커서가 있으면 커서보다 이전 피드 중 차단 관계인 사용자의 피드를 빼고 조회한다")
+        void excludeBlockedUsersWithCursor() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            given(userBlockRepository.findAllByBlockerIdOrBlockedId(USER_ID, USER_ID)).willReturn(List.of(
+                    UserBlock.builder().blocker(me).blocked(writer(3L, "차단한 튜니", null)).type(BlockType.BLOCK).build()));
+            given(feedRepository.findByUserIdNotInAndIdLessThanOrderByIdDesc(List.of(3L), 5L, pageable)).willReturn(
+                    new SliceImpl<>(List.of(savedFeed(4L, me)), pageable, false));
+
+            // when
+            FeedListResponse response = feedService.getFeeds(USER_ID, 5L, SIZE);
+
+            // then
+            assertThat(response.getFeeds()).extracting("feedId").containsExactly(4L);
+            verify(feedRepository, never()).findByIdLessThanOrderByIdDesc(any(), any());
         }
     }
 
@@ -543,6 +603,26 @@ class FeedServiceTest {
 
             verify(feedMessageRepository, never()).save(any());
             verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("차단 관계인 사용자의 피드면 BLOCKED_USER 예외가 발생하고 메시지, 알림을 저장하지 않는다")
+        void blockedUserFeed() {
+            // given
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(writer(USER_ID, "튜니", null)));
+            given(feedRepository.findById(FEED_ID))
+                    .willReturn(Optional.of(savedFeed(FEED_ID, writer(OTHER_USER_ID, "산책하는 튜니", null))));
+            given(userBlockRepository.existsByBlockerIdAndBlockedIdOrBlockerIdAndBlockedId(USER_ID, OTHER_USER_ID, OTHER_USER_ID, USER_ID)).willReturn(true);
+
+            // when & then
+            assertThatThrownBy(() -> feedService.sendMessage(USER_ID, FEED_ID, MESSAGE, newMusic()))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.BLOCKED_USER);
+
+            verify(feedMessageRepository, never()).save(any());
+            verify(notificationRepository, never()).save(any());
+            verify(eventPublisher, never()).publishEvent(any());
         }
 
         @Test

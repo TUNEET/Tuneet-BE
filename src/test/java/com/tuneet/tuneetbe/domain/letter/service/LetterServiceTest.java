@@ -13,8 +13,11 @@ import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.notification.enums.NotificationType;
 import com.tuneet.tuneetbe.domain.notification.event.PushEvent;
 import com.tuneet.tuneetbe.domain.user.entity.User;
+import com.tuneet.tuneetbe.domain.user.entity.UserBlock;
+import com.tuneet.tuneetbe.domain.user.enums.BlockType;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
+import com.tuneet.tuneetbe.domain.user.repository.UserBlockRepository;
 import com.tuneet.tuneetbe.global.exception.CustomException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -61,6 +64,9 @@ class LetterServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private UserBlockRepository userBlockRepository;
 
     @InjectMocks
     private LetterService letterService;
@@ -192,6 +198,24 @@ class LetterServiceTest {
         }
 
         @Test
+        @DisplayName("받는 사람과 차단 관계면 BLOCKED_USER 예외가 발생하고 저장하지 않는다")
+        void blockedReceiver() {
+            // given
+            given(userRepository.findByIdForUpdate(SENDER_ID)).willReturn(Optional.of(savedUser(SENDER_ID, "튜니")));
+            given(userRepository.findById(RECEIVER_ID)).willReturn(Optional.of(savedUser(RECEIVER_ID, "원이")));
+            given(userBlockRepository.existsByBlockerIdAndBlockedIdOrBlockerIdAndBlockedId(SENDER_ID, RECEIVER_ID, RECEIVER_ID, SENDER_ID)).willReturn(true);
+
+            // when & then
+            assertThatThrownBy(() -> letterService.sendLetter(SENDER_ID, RECEIVER_ID, savedMusic(), CONTENT))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.BLOCKED_USER);
+
+            verify(letterRepository, never()).save(any());
+            verify(eventPublisher, never()).publishEvent(any());
+        }
+
+        @Test
         @DisplayName("받는 사람이 편지 받기를 껐으면 LETTER_NOT_RECEIVABLE 예외가 발생한다")
         void notReceivable() {
             // given
@@ -239,8 +263,8 @@ class LetterServiceTest {
             User receiver = savedUser(RECEIVER_ID, "원이");
             given(userRepository.findByIdForUpdate(SENDER_ID)).willReturn(Optional.of(sender));
             givenSentToday(0);
-            given(userRepository.countByIdNotAndDeletedAtIsNullAndLetterReceivableTrue(SENDER_ID)).willReturn(1L);
-            given(userRepository.findByIdNotAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(SENDER_ID, PageRequest.of(0, 1)))
+            given(userRepository.countByIdNotInAndDeletedAtIsNullAndLetterReceivableTrue(List.of(SENDER_ID))).willReturn(1L);
+            given(userRepository.findByIdNotInAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(List.of(SENDER_ID), PageRequest.of(0, 1)))
                     .willReturn(List.of(receiver));
             givenSaveReturnsLetterWithId();
 
@@ -272,8 +296,8 @@ class LetterServiceTest {
             // given
             given(userRepository.findByIdForUpdate(SENDER_ID)).willReturn(Optional.of(savedUser(SENDER_ID, "튜니")));
             givenSentToday(0);
-            given(userRepository.countByIdNotAndDeletedAtIsNullAndLetterReceivableTrue(SENDER_ID)).willReturn(3L);
-            given(userRepository.findByIdNotAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(eq(SENDER_ID), any(Pageable.class)))
+            given(userRepository.countByIdNotInAndDeletedAtIsNullAndLetterReceivableTrue(List.of(SENDER_ID))).willReturn(3L);
+            given(userRepository.findByIdNotInAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(eq(List.of(SENDER_ID)), any(Pageable.class)))
                     .willReturn(List.of(savedUser(RECEIVER_ID, "원이")));
             givenSaveReturnsLetterWithId();
 
@@ -282,7 +306,7 @@ class LetterServiceTest {
 
             // then
             ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-            verify(userRepository).findByIdNotAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(eq(SENDER_ID), captor.capture());
+            verify(userRepository).findByIdNotInAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(eq(List.of(SENDER_ID)), captor.capture());
             assertThat(captor.getValue().getPageSize()).isEqualTo(1);
             assertThat(captor.getValue().getPageNumber()).isBetween(0, 2);
         }
@@ -293,7 +317,7 @@ class LetterServiceTest {
             // given
             given(userRepository.findByIdForUpdate(SENDER_ID)).willReturn(Optional.of(savedUser(SENDER_ID, "튜니")));
             givenSentToday(0);
-            given(userRepository.countByIdNotAndDeletedAtIsNullAndLetterReceivableTrue(SENDER_ID)).willReturn(0L);
+            given(userRepository.countByIdNotInAndDeletedAtIsNullAndLetterReceivableTrue(List.of(SENDER_ID))).willReturn(0L);
 
             // when & then
             assertThatThrownBy(() -> letterService.sendRandomLetter(SENDER_ID, savedMusic(), CONTENT))
@@ -305,13 +329,39 @@ class LetterServiceTest {
         }
 
         @Test
+        @DisplayName("내가 차단한 사용자와 나를 차단한 사용자를 나와 함께 후보에서 제외한다")
+        void excludeBlockedUsers() {
+            // given
+            User sender = savedUser(SENDER_ID, "튜니");
+            User blockedByMe = savedUser(3L, "차단한 튜니");
+            User blockingMe = savedUser(4L, "나를 차단한 튜니");
+            given(userRepository.findByIdForUpdate(SENDER_ID)).willReturn(Optional.of(sender));
+            givenSentToday(0);
+            given(userBlockRepository.findAllByBlockerIdOrBlockedId(SENDER_ID, SENDER_ID)).willReturn(List.of(
+                    UserBlock.builder().blocker(sender).blocked(blockedByMe).type(BlockType.BLOCK).build(),
+                    UserBlock.builder().blocker(blockingMe).blocked(sender).type(BlockType.BLOCK).build()));
+            List<Long> excludedUserIds = List.of(3L, 4L, SENDER_ID);
+            given(userRepository.countByIdNotInAndDeletedAtIsNullAndLetterReceivableTrue(excludedUserIds)).willReturn(1L);
+            given(userRepository.findByIdNotInAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(excludedUserIds, PageRequest.of(0, 1)))
+                    .willReturn(List.of(savedUser(RECEIVER_ID, "원이")));
+            givenSaveReturnsLetterWithId();
+
+            // when
+            RandomLetterSendResponse response = letterService.sendRandomLetter(SENDER_ID, savedMusic(), CONTENT);
+
+            // then
+            assertThat(response.getReceiverNickname()).isEqualTo("원이");
+            verify(userRepository).countByIdNotInAndDeletedAtIsNullAndLetterReceivableTrue(excludedUserIds);
+        }
+
+        @Test
         @DisplayName("후보 수를 센 뒤 후보가 줄어 조회 결과가 비면 LETTER_NO_RANDOM_RECEIVER 예외가 발생하고 저장하지 않는다")
         void candidateRemovedAfterCount() {
             // given
             given(userRepository.findByIdForUpdate(SENDER_ID)).willReturn(Optional.of(savedUser(SENDER_ID, "튜니")));
             givenSentToday(0);
-            given(userRepository.countByIdNotAndDeletedAtIsNullAndLetterReceivableTrue(SENDER_ID)).willReturn(1L);
-            given(userRepository.findByIdNotAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(SENDER_ID, PageRequest.of(0, 1)))
+            given(userRepository.countByIdNotInAndDeletedAtIsNullAndLetterReceivableTrue(List.of(SENDER_ID))).willReturn(1L);
+            given(userRepository.findByIdNotInAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(List.of(SENDER_ID), PageRequest.of(0, 1)))
                     .willReturn(List.of());
 
             // when & then
@@ -336,7 +386,7 @@ class LetterServiceTest {
                     .extracting("errorCode")
                     .isEqualTo(LetterErrorCode.LETTER_DAILY_LIMIT_EXCEEDED);
 
-            verify(userRepository, never()).countByIdNotAndDeletedAtIsNullAndLetterReceivableTrue(anyLong());
+            verify(userRepository, never()).countByIdNotInAndDeletedAtIsNullAndLetterReceivableTrue(any());
             verify(letterRepository, never()).save(any());
         }
 
@@ -809,6 +859,25 @@ class LetterServiceTest {
                     .isInstanceOf(CustomException.class)
                     .extracting("errorCode")
                     .isEqualTo(LetterErrorCode.LETTER_REPLY_TO_DELETED_USER);
+
+            verify(letterRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("원래 편지를 보낸 사람과 차단 관계면 차단 전에 받은 편지라도 BLOCKED_USER 예외가 발생하고 저장하지 않는다")
+        void blockedOriginalSender() {
+            // given
+            User original = savedUser(SENDER_ID, "튜니");
+            User me = savedUser(RECEIVER_ID, "원이");
+            given(userRepository.findById(RECEIVER_ID)).willReturn(Optional.of(me));
+            given(letterRepository.findById(PARENT_LETTER_ID)).willReturn(Optional.of(savedLetter(PARENT_LETTER_ID, original, me)));
+            given(userBlockRepository.existsByBlockerIdAndBlockedIdOrBlockerIdAndBlockedId(RECEIVER_ID, SENDER_ID, SENDER_ID, RECEIVER_ID)).willReturn(true);
+
+            // when & then
+            assertThatThrownBy(() -> letterService.letterReply(RECEIVER_ID, PARENT_LETTER_ID, savedMusic(), CONTENT))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.BLOCKED_USER);
 
             verify(letterRepository, never()).save(any());
         }

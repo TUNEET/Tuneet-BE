@@ -15,7 +15,9 @@ import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.notification.enums.NotificationType;
 import com.tuneet.tuneetbe.domain.notification.event.PushEvent;
 import com.tuneet.tuneetbe.domain.user.entity.User;
+import com.tuneet.tuneetbe.domain.user.entity.UserBlock;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
+import com.tuneet.tuneetbe.domain.user.repository.UserBlockRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
 import com.tuneet.tuneetbe.global.exception.CustomException;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +47,7 @@ public class LetterService {
     private final LetterRepository letterRepository;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final UserBlockRepository userBlockRepository;
 
     // 지정 편지 발송
     @Transactional
@@ -69,6 +72,12 @@ public class LetterService {
         if (receiver.isDeleted()) {
             log.warn("[LetterService] 탈퇴한 사용자에게는 편지를 보낼 수 없습니다.");
             throw new CustomException(UserErrorCode.USER_NOT_FOUND);
+        }
+
+        // 차단 관계인 사용자인지 확인 (내가 차단했거나 상대가 나를 차단하면 편지를 보낼 수 없음)
+        if (userBlockRepository.existsByBlockerIdAndBlockedIdOrBlockerIdAndBlockedId(userId, receiverId, receiverId, userId)) {
+            log.warn("[LetterService] 차단 관계인 사용자에게는 편지를 보낼 수 없습니다.");
+            throw new CustomException(UserErrorCode.BLOCKED_USER);
         }
 
         // 받는 사람의 편지 받기 설정 확인
@@ -131,8 +140,12 @@ public class LetterService {
             throw new CustomException(LetterErrorCode.LETTER_DAILY_LIMIT_EXCEEDED);
         }
 
+        // 후보에서 제외할 사용자 (나 + 나와 차단 관계인 사용자)
+        List<Long> excludedUserIds = getBlockedRelationUserIds(userId);
+        excludedUserIds.add(userId);
+
         // 받을 수 있는 사용자 수 확인 (나, 탈퇴한 사용자, 편지 받기를 끈 사용자 제외)
-        long candidateCount = userRepository.countByIdNotAndDeletedAtIsNullAndLetterReceivableTrue(userId);
+        long candidateCount = userRepository.countByIdNotInAndDeletedAtIsNullAndLetterReceivableTrue(excludedUserIds);
         if (candidateCount == 0) {
             log.warn("[LetterService] 랜덤 편지를 받을 수 있는 사용자가 없습니다.");
             throw new CustomException(LetterErrorCode.LETTER_NO_RANDOM_RECEIVER);
@@ -143,7 +156,7 @@ public class LetterService {
         int randomIndex = ThreadLocalRandom.current().nextInt((int) candidateCount);
 
         // 랜덤 위치의 사용자 한 명 조회 (한 명씩 나눈 페이지 중 randomIndex 번째 페이지)
-        List<User> candidates = userRepository.findByIdNotAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(userId, PageRequest.of(randomIndex, 1));
+        List<User> candidates = userRepository.findByIdNotInAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(excludedUserIds, PageRequest.of(randomIndex, 1));
 
         // 그 사이 후보가 편지 수신 거부를 하거나 탈퇴하면 조회 결과가 없을 수도 있기 때문에 받을 사람이 없는 것으로 처리
         if (candidates.isEmpty()) {
@@ -387,6 +400,12 @@ public class LetterService {
             throw new CustomException(LetterErrorCode.LETTER_REPLY_TO_DELETED_USER);
         }
 
+        // 차단 관계인 사용자인지 확인 (차단 전에 받은 편지라도 답장은 보낼 수 없음)
+        if (userBlockRepository.existsByBlockerIdAndBlockedIdOrBlockerIdAndBlockedId(userId, receiver.getId(), receiver.getId(), userId)) {
+            log.warn("[LetterService] 차단 관계인 사용자에게는 답장을 보낼 수 없습니다.");
+            throw new CustomException(UserErrorCode.BLOCKED_USER);
+        }
+
         // 받는 사람의 편지 받기 설정 확인
         if (!receiver.getLetterReceivable()) {
             log.warn("[LetterService] 편지 수신 거부 사용자에게는 답장을 보낼 수 없습니다.");
@@ -500,5 +519,23 @@ public class LetterService {
 
         // 로그 출력
         log.info("[LetterService] 보낸 편지 전체 삭제 성공: userId = {}, count = {}", userId, letters.size());
+    }
+
+    // 나와 차단 관계인 사용자 id 목록 (내가 차단한 사용자 + 나를 차단한 사용자)
+    private List<Long> getBlockedRelationUserIds(Long userId) {
+
+        List<Long> blockedUserIds = new ArrayList<>();
+        for (UserBlock userBlock : userBlockRepository.findAllByBlockerIdOrBlockedId(userId, userId)) {
+
+            // 내가 차단한 기록이면 차단된 사람, 나를 차단한 기록이면 차단한 사람
+            if (userBlock.getBlocker().getId().equals(userId)) {
+                blockedUserIds.add(userBlock.getBlocked().getId());
+            }
+            else {
+                blockedUserIds.add(userBlock.getBlocker().getId());
+            }
+        }
+
+        return blockedUserIds;
     }
 }

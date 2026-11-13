@@ -28,8 +28,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByIdForUpdate(@Param("userId") Long userId);
 
     // 랜덤 편지를 받을 수 있는 사용자 수 (나 제외, 탈퇴하지 않음, 편지 받기 켬)
-    long countByIdNotAndDeletedAtIsNullAndLetterReceivableTrue(Long userId);
+    // 나와 차단 관계인 사용자도 제외
+    long countByIdNotInAndDeletedAtIsNullAndLetterReceivableTrue(List<Long> excludedUserIds);
 
     // 랜덤 편지를 받을 수 있는 사용자 조회 (나 제외, 탈퇴하지 않음, 편지 받기 켬)
-    List<User> findByIdNotAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(Long userId, Pageable pageable);
+    // 나와 차단 관계인 사용자도 제외
+    List<User> findByIdNotInAndDeletedAtIsNullAndLetterReceivableTrueOrderByIdAsc(List<Long> excludedUserIds, Pageable pageable);
 }
