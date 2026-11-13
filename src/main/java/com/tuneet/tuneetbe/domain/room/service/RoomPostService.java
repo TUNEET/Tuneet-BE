@@ -7,6 +7,7 @@ import com.tuneet.tuneetbe.domain.room.entity.Room;
 import com.tuneet.tuneetbe.domain.room.entity.RoomPost;
 import com.tuneet.tuneetbe.domain.room.exception.RoomErrorCode;
 import com.tuneet.tuneetbe.domain.room.repository.RoomPostRepository;
+import com.tuneet.tuneetbe.domain.room.repository.RoomUserRepository;
 import com.tuneet.tuneetbe.domain.user.entity.User;
 import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
@@ -19,6 +20,8 @@ import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Set;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -28,6 +31,7 @@ public class RoomPostService {
     private final RoomPostRepository roomPostRepository;
     private final UserRepository userRepository;
     private final RoomMemberReader roomMemberReader;
+    private final RoomUserRepository roomUserRepository;
 
     @Transactional
     public RoomPostResponse createRoomPost(Long roomId, Long userId, Music music, String content){
@@ -47,7 +51,7 @@ public class RoomPostService {
 
         log.info("[RoomPostService] 방 포스트 작성 성공: roomPostId = {}", savedRoomPost.getId());
 
-        return RoomPostResponse.from(savedRoomPost, userId);
+        return RoomPostResponse.from(savedRoomPost, userId, Set.of(userId));
     }
 
     public RoomPostListResponse getRoomPostList(Long roomId, Long userId, Long cursor, Integer size){
@@ -59,7 +63,10 @@ public class RoomPostService {
                 ? roomPostRepository.findByRoomIdOrderByIdDesc(roomId, pageable)
                 : roomPostRepository.findByRoomIdAndIdLessThanOrderByIdDesc(roomId, cursor, pageable);
 
-        return RoomPostListResponse.from(posts, userId);
+        // 나간 멤버 표시용
+        Set<Long> roomUserIds = roomUserRepository.findUserIdsByRoomId(roomId);
+
+        return RoomPostListResponse.from(posts, userId, roomUserIds);
     }
 
     @Transactional

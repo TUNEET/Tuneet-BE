@@ -138,4 +138,34 @@ class RoomControllerTest {
             verify(roomService, times(1)).entryRoom(request, USER_ID);
         }
     }
+
+    @Test
+    @DisplayName("방 나가기에 성공하면 200과 본문 code 200을 반환한다")
+    void leaveRoom() {
+        // given
+        given(userDetails.getUserId()).willReturn(USER_ID);
+
+        // when
+        ResponseEntity<BaseResponse<Void>> result = roomController.leaveRoom(userDetails, ROOM_ID);
+
+        // then
+        verify(roomService).leaveRoom(ROOM_ID, USER_ID);
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody().getCode()).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("방 삭제에 성공하면 200과 본문 code 200을 반환한다")
+    void deleteRoom() {
+        // given
+        given(userDetails.getUserId()).willReturn(USER_ID);
+
+        // when
+        ResponseEntity<BaseResponse<Void>> result = roomController.deleteRoom(userDetails, ROOM_ID);
+
+        // then
+        verify(roomService).deleteRoom(ROOM_ID, USER_ID);
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody().getCode()).isEqualTo(200);
+    }
 }
