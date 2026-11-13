@@ -112,8 +112,13 @@ public class RoomService {
     @Transactional
     public RoomEntryResponse entryRoom(RoomEntryRequest request, Long userId) {
 
-        // 방에 참여할 유저 찾기
-        User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+        // 방에 참여할 유저 찾기 (회원탈퇴와 같은 사용자 행 잠금으로 순서대로 처리)
+        User user = userRepository.findByIdForUpdate(userId).orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+
+        // 탈퇴한 사용자라면 -> 입장 불가 (탈퇴가 끝나기를 기다린 요청)
+        if (user.isDeleted()) {
+            throw new CustomException(UserErrorCode.USER_NOT_FOUND);
+        }
 
         // 초대 코드 기반하여 참여할 방 찾기
         Room room = roomRepository.findByInviteCode(request.getInviteCode()).orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));

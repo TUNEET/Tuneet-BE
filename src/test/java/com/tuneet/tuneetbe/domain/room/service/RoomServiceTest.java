@@ -332,7 +332,7 @@ class RoomServiceTest {
         }
 
         private void givenUserAndRoom(Room room) {
-            given(userRepository.findById(USER_ID)).willReturn(Optional.of(savedUser()));
+            given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(savedUser()));
             given(roomRepository.findByInviteCode(INVITE_CODE)).willReturn(Optional.of(room));
         }
 
@@ -443,7 +443,7 @@ class RoomServiceTest {
         @DisplayName("초대 코드에 맞는 방이 없으면 ROOM_NOT_FOUND 예외가 발생한다")
         void roomNotFound() {
             // given
-            given(userRepository.findById(USER_ID)).willReturn(Optional.of(savedUser()));
+            given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(savedUser()));
             given(roomRepository.findByInviteCode(INVITE_CODE)).willReturn(Optional.empty());
 
             // when & then
@@ -459,7 +459,7 @@ class RoomServiceTest {
         @DisplayName("사용자가 없으면 USER_NOT_FOUND 예외가 발생한다")
         void userNotFound() {
             // given
-            given(userRepository.findById(USER_ID)).willReturn(Optional.empty());
+            given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.empty());
 
             // when & then
             assertThatThrownBy(() -> roomService.entryRoom(entry(null), USER_ID))
@@ -468,6 +468,24 @@ class RoomServiceTest {
                     .isEqualTo(UserErrorCode.USER_NOT_FOUND);
 
             verify(roomRepository, never()).findByInviteCode(any());
+        }
+
+        @Test
+        @DisplayName("탈퇴한 사용자면 USER_NOT_FOUND 예외가 발생하고 입장하지 않는다")
+        void deletedUser() {
+            // given
+            User user = savedUser();
+            user.deleteUser(LocalDateTime.now());
+            given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(user));
+
+            // when & then
+            assertThatThrownBy(() -> roomService.entryRoom(entry(null), USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.USER_NOT_FOUND);
+
+            verify(roomRepository, never()).findByInviteCode(any());
+            verify(roomUserRepository, never()).save(any());
         }
     }
 

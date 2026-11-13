@@ -256,7 +256,7 @@ class UserServiceTest {
         void destroyPersonalInformation() {
             // given
             User user = deletableUser();
-            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+            given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(user));
 
             // when
             userService.deleteUser(USER_ID);
@@ -275,7 +275,7 @@ class UserServiceTest {
         @DisplayName("피드는 자식 데이터부터 삭제하고 연관 데이터와 받은 알림을 삭제한다")
         void deleteRelatedData() {
             // given
-            given(userRepository.findById(USER_ID)).willReturn(Optional.of(deletableUser()));
+            given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(deletableUser()));
 
             // when
             userService.deleteUser(USER_ID);
@@ -297,7 +297,7 @@ class UserServiceTest {
         @DisplayName("참여 중인 방을 모두 나간다")
         void leaveRooms() {
             // given
-            given(userRepository.findById(USER_ID)).willReturn(Optional.of(deletableUser()));
+            given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(deletableUser()));
 
             // when
             userService.deleteUser(USER_ID);
@@ -312,7 +312,7 @@ class UserServiceTest {
             // given
             User user = deletableUser();
             user.deleteUser(LocalDateTime.now());
-            given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
+            given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(user));
 
             // when & then
             assertThatThrownBy(() -> userService.deleteUser(USER_ID))
@@ -327,7 +327,7 @@ class UserServiceTest {
         @DisplayName("사용자가 없으면 USER_NOT_FOUND 예외가 발생한다")
         void userNotFound() {
             // given
-            given(userRepository.findById(USER_ID)).willReturn(Optional.empty());
+            given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.empty());
 
             // when & then
             assertThatThrownBy(() -> userService.deleteUser(USER_ID))

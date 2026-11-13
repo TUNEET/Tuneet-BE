@@ -399,8 +399,8 @@ public class UserService {
     @Transactional
     public void deleteUser(Long userId) {
 
-        // 로그인한 사용자 조회
-        User user = userRepository.findById(userId)
+        // 로그인한 사용자 조회 (방 입장과 같은 행 잠금, 가장 먼저 잠가야 이후 조회가 최신 상태를 읽음)
+        User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
         // 이미 탈퇴한 사용자인지 확인
