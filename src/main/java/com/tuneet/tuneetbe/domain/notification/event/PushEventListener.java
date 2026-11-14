@@ -18,6 +18,6 @@ public class PushEventListener {
     // @TransactionalEventListener이 붙은 메서드를 찾아서 리스너가 동작한다 기억
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT) // AFTER_COMMIT: 편지, 메시지 저장이 커밋된 뒤에만 실행 (롤백되면 푸시를 보내지 않음)
     public void handle(PushEvent event) { // event를 받는다는 메서드
-        fcmService.send(event.userId(), event.title(), event.body(), event.type(), event.targetId());
+        fcmService.send(event.userId(), event.title(), event.body(), event.type(), event.targetId(), event.senderNickname(), event.createdAt());
     }
 }

@@ -280,7 +280,7 @@ public class FeedService {
                 .build());
 
         // 피드 작성자에게 푸시 알림 (커밋 후 전송, 알림을 누르면 피드 상세로 이동)
-        eventPublisher.publishEvent(new PushEvent(feed.getUser().getId(), "내 피드에 메시지가 왔어요", user.getNickname() + "님이 메시지를 보냈어요", NotificationType.FEED_MESSAGE, feed.getId()));
+        eventPublisher.publishEvent(new PushEvent(feed.getUser().getId(), "내 피드에 메시지가 왔어요", user.getNickname() + "님이 메시지를 보냈어요", NotificationType.FEED_MESSAGE, feed.getId(), user.getNickname(), feedMessage.getCreatedAt()));
 
         // 로그 출력
         log.info("[FeedService] 피드 메시지 작성 성공: feedMessageId = {}", feedMessage.getId());
