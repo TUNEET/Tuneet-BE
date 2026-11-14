@@ -1,5 +1,24 @@
-# Tuneet-BE
-TUNEET | Backend
+# 🎧 TUNEET | Backend
+
+## 👥 Team Member
+
+| <a href="https://github.com/kjm021028"><img width="150" alt="/" src="https://avatars.githubusercontent.com/kjm021028" /></a> | <a href="https://github.com/Woohwooh03"><img width="150" alt="/" src="https://avatars.githubusercontent.com/Woohwooh03" /></a> |
+| --- | --- |
+| 김정모 | 김태현 |
+
+## 🛠 기술 스택
+
+### Backend
+<img src="https://img.shields.io/badge/Java 21-F89820?style=for-the-badge&logo=openjdk&logoColor=white"> <img src="https://img.shields.io/badge/Spring Boot 4-6DB33F?style=for-the-badge&logo=springboot&logoColor=white">
+
+### Database
+<img src="https://img.shields.io/badge/MySQL 8-4479A1?style=for-the-badge&logo=mysql&logoColor=white"> <img src="https://img.shields.io/badge/Flyway-CC0200?style=for-the-badge&logo=flyway&logoColor=white">
+
+### Auth & Notification
+<img src="https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white"> <img src="https://img.shields.io/badge/Firebase Cloud Messaging-DD2C00?style=for-the-badge&logo=firebase&logoColor=white">
+
+### Infrastructure & Tools
+<img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white"> <img src="https://img.shields.io/badge/GitHub Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white"> <img src="https://img.shields.io/badge/AWS EC2-FF9900?style=for-the-badge&logo=amazonec2&logoColor=white"> <img src="https://img.shields.io/badge/AWS S3-569A31?style=for-the-badge&logo=amazons3&logoColor=white"> <img src="https://img.shields.io/badge/Swagger-85EA2D?style=for-the-badge&logo=swagger&logoColor=black">
 
 ## 🎯 Git Convention
 
