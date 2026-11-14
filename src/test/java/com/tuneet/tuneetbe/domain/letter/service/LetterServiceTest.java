@@ -146,6 +146,7 @@ class LetterServiceTest {
             assertThat(eventCaptor.getValue().userId()).isEqualTo(RECEIVER_ID);
             assertThat(eventCaptor.getValue().type()).isEqualTo(NotificationType.LETTER);
             assertThat(eventCaptor.getValue().targetId()).isEqualTo(LETTER_ID);
+            assertThat(eventCaptor.getValue().senderNickname()).isEqualTo("튜니");
         }
 
         @Test
@@ -283,6 +284,7 @@ class LetterServiceTest {
             assertThat(eventCaptor.getValue().userId()).isEqualTo(RECEIVER_ID);
             assertThat(eventCaptor.getValue().type()).isEqualTo(NotificationType.LETTER);
             assertThat(eventCaptor.getValue().targetId()).isEqualTo(LETTER_ID);
+            assertThat(eventCaptor.getValue().senderNickname()).isEqualTo("튜니");
 
             assertThat(response.getLetterId()).isEqualTo(LETTER_ID);
             assertThat(response.getSenderNickname()).isEqualTo("튜니");
@@ -792,6 +794,7 @@ class LetterServiceTest {
             assertThat(eventCaptor.getValue().title()).isEqualTo("답장이 도착했어요");
             assertThat(eventCaptor.getValue().type()).isEqualTo(NotificationType.LETTER);
             assertThat(eventCaptor.getValue().targetId()).isEqualTo(LETTER_ID);
+            assertThat(eventCaptor.getValue().senderNickname()).isEqualTo("원이");
         }
 
         @Test

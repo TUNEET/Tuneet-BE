@@ -103,7 +103,7 @@ public class LetterService {
                 .build());
 
         // 받는 사람에게 푸시 알림 (커밋 후 전송)
-        eventPublisher.publishEvent(new PushEvent(receiver.getId(), "새 편지가 도착했어요", sender.getNickname() + "님이 편지를 보냈어요", NotificationType.LETTER, letter.getId()));
+        eventPublisher.publishEvent(new PushEvent(receiver.getId(), "새 편지가 도착했어요", sender.getNickname() + "님이 편지를 보냈어요", NotificationType.LETTER, letter.getId(), sender.getNickname(), letter.getCreatedAt()));
 
         // 로그 출력
         log.info("[LetterService] 편지 발송 성공: letterId = {}", letter.getId());
@@ -175,7 +175,7 @@ public class LetterService {
                 .build());
 
         // 받는 사람에게 푸시 알림 (커밋 후 전송)
-        eventPublisher.publishEvent(new PushEvent(receiver.getId(), "새 편지가 도착했어요", sender.getNickname() + "님이 편지를 보냈어요", NotificationType.LETTER, letter.getId()));
+        eventPublisher.publishEvent(new PushEvent(receiver.getId(), "새 편지가 도착했어요", sender.getNickname() + "님이 편지를 보냈어요", NotificationType.LETTER, letter.getId(), sender.getNickname(), letter.getCreatedAt()));
 
         // 로그 출력
         log.info("[LetterService] 랜덤 편지 발송 성공: letterId = {}", letter.getId());
@@ -423,7 +423,7 @@ public class LetterService {
                 .build());
 
         // 받는 사람에게 푸시 알림 (커밋 후 전송)
-        eventPublisher.publishEvent(new PushEvent(receiver.getId(), "답장이 도착했어요", sender.getNickname() + "님이 답장을 보냈어요", NotificationType.LETTER, letter.getId()));
+        eventPublisher.publishEvent(new PushEvent(receiver.getId(), "답장이 도착했어요", sender.getNickname() + "님이 답장을 보냈어요", NotificationType.LETTER, letter.getId(), sender.getNickname(), letter.getCreatedAt()));
 
         // 로그 출력
         log.info("[LetterService] 답장 편지 발송 성공: letterId = {}", letter.getId());

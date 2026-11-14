@@ -10,6 +10,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,7 +24,8 @@ public class FcmService {
 
     // 사용자의 모든 기기로 푸시 전송
     @Transactional
-    public void send(Long userId, String title, String body, NotificationType type, Long targetId) {
+    public void send(Long userId, String title, String body, NotificationType type, Long targetId,
+                     String senderNickname, LocalDateTime createdAt) {
 
         // Firebase 키가 없는 환경이면 전송하지 않음
         FirebaseMessaging messaging = firebaseMessaging.getIfAvailable();
@@ -51,6 +53,8 @@ public class FcmService {
                         .build())
                 .putData("type", type.name()) // 알림 종류
                 .putData("targetId", String.valueOf(targetId)) // 이동할 대상 ID
+                .putData("senderNickname", senderNickname) // 보낸 사람 닉네임
+                .putData("createdAt", String.valueOf(createdAt)) // 보낸 시간 (data는 문자열만 가능해서 문자열로 변환)
                 .build();
 
         try {

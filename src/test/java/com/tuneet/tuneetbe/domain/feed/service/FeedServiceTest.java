@@ -578,6 +578,7 @@ class FeedServiceTest {
             assertThat(eventCaptor.getValue().userId()).isEqualTo(OTHER_USER_ID);
             assertThat(eventCaptor.getValue().type()).isEqualTo(NotificationType.FEED_MESSAGE);
             assertThat(eventCaptor.getValue().targetId()).isEqualTo(FEED_ID);
+            assertThat(eventCaptor.getValue().senderNickname()).isEqualTo("튜니");
 
             assertThat(response.getFeedMessageId()).isEqualTo(MESSAGE_ID);
             assertThat(response.getFeedId()).isEqualTo(FEED_ID);
