@@ -44,4 +44,4 @@ music-api:
   api-key: ${MUSIC_API_KEY}
 
 cors:
-  allowed-origins: http://localhost:3000,http://localhost:5173
+  allowed-origins: http://localhost:3000,http://localhost:5173,https://tuneet.site,https://www.tuneet.site
