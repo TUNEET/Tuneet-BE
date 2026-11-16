@@ -562,6 +562,8 @@ class RoomServiceTest {
                 assertThat(item.getRoomPlaylistId()).isEqualTo(30L);
                 assertThat(item.getPosition()).isEqualTo(1);
                 assertThat(item.getMusic().getMusicId()).isEqualTo("music-7");
+                assertThat(item.getIsMine()).isFalse();
+                assertThat(item.getDeletable()).isFalse();
             });
         }
 
@@ -776,6 +778,7 @@ class RoomServiceTest {
         ReflectionTestUtils.setField(playlist, "id", id);
         ReflectionTestUtils.setField(playlist, "music", music);
         ReflectionTestUtils.setField(playlist, "position", position);
+        ReflectionTestUtils.setField(playlist, "user", user(2L, "방장"));
         return playlist;
     }
 
