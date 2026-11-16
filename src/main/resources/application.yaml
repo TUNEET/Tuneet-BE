@@ -43,5 +43,15 @@ music-api:
   base-url: ${MUSIC_API_BASE_URL}
   api-key: ${MUSIC_API_KEY}
 
+# 유튜브 뮤직 연동 (값이 없어도 서버는 뜨고, 연동 기능을 쓸 때 실패)
+google:
+  oauth:
+    client-id: ${GOOGLE_CLIENT_ID:}
+    client-secret: ${GOOGLE_CLIENT_SECRET:}
+    redirect-uri: ${GOOGLE_REDIRECT_URI:}
+
+platform:
+  token-key: ${PLATFORM_TOKEN_KEY:}
+
 cors:
   allowed-origins: http://localhost:3000,http://localhost:5173,https://tuneet.site,https://www.tuneet.site

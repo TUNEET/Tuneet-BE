@@ -76,13 +76,17 @@ jobs:
           MUSIC_API_BASE_URL: ${{ secrets.MUSIC_API_BASE_URL }}
           MUSIC_API_KEY: ${{ secrets.MUSIC_API_KEY }}
           FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_CREDENTIALS }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REDIRECT_URI: ${{ secrets.GOOGLE_REDIRECT_URI }}
+          PLATFORM_TOKEN_KEY: ${{ secrets.PLATFORM_TOKEN_KEY }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: BACKEND_IMAGE,DB_PASSWORD,JWT_SECRET,AWS_ACCESS_KEY,AWS_SECRET_KEY,AWS_S3_BUCKET,MUSIC_API_BASE_URL,MUSIC_API_KEY,FIREBASE_CREDENTIALS,GHCR_USER,GHCR_TOKEN
+          envs: BACKEND_IMAGE,DB_PASSWORD,JWT_SECRET,AWS_ACCESS_KEY,AWS_SECRET_KEY,AWS_S3_BUCKET,MUSIC_API_BASE_URL,MUSIC_API_KEY,FIREBASE_CREDENTIALS,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REDIRECT_URI,PLATFORM_TOKEN_KEY,GHCR_USER,GHCR_TOKEN
           script_stop: true
           script: |
             cd ~/app
@@ -97,7 +101,7 @@ jobs:
               "AWS_S3_BUCKET=$AWS_S3_BUCKET" \
               "MUSIC_API_BASE_URL=$MUSIC_API_BASE_URL" \
               "MUSIC_API_KEY=$MUSIC_API_KEY" \
-              "FIREBASE_CREDENTIALS=$FIREBASE_CREDENTIALS" > .env
+              "FIREBASE_CREDENTIALS=$FIREBASE_CREDENTIALS" \n              "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" \n              "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" \n              "GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI" \n              "PLATFORM_TOKEN_KEY=$PLATFORM_TOKEN_KEY" > .env
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose pull backend
             docker compose up -d --no-build

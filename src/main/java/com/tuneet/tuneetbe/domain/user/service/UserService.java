@@ -10,6 +10,7 @@ import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
 import com.tuneet.tuneetbe.domain.notification.repository.DeviceTokenRepository;
 import com.tuneet.tuneetbe.domain.notification.repository.NotificationRepository;
+import com.tuneet.tuneetbe.domain.platform.event.PlatformTokenRevokeEvent;
 import com.tuneet.tuneetbe.domain.room.service.RoomRemover;
 import com.tuneet.tuneetbe.domain.user.dto.request.GenreReplaceRequest;
 import com.tuneet.tuneetbe.domain.user.dto.request.ProfileAddRequest;
@@ -33,12 +34,14 @@ import com.tuneet.tuneetbe.domain.user.exception.UserErrorCode;
 import com.tuneet.tuneetbe.domain.user.repository.UserArtistRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserBlockRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserGenreRepository;
+import com.tuneet.tuneetbe.domain.user.repository.UserMusicLikeRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserMusicRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserPlatformRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
 import com.tuneet.tuneetbe.global.exception.CustomException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,6 +71,8 @@ public class UserService {
     private final DeviceTokenRepository deviceTokenRepository;
     private final RoomRemover roomRemover;
     private final PasswordEncoder passwordEncoder;
+    private final UserMusicLikeRepository userMusicLikeRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 회원가입
     @Transactional
@@ -459,6 +464,11 @@ public class UserService {
         userGenreRepository.deleteAllByUserId(userId);
         userArtistRepository.deleteAllByUserId(userId);
         userMusicRepository.deleteAllByUserId(userId);
+        userMusicLikeRepository.deleteAllByUserId(userId);
+
+        // 커밋 후 연동한 플랫폼의 Google 토큰 폐기
+        userPlatformRepository.findAllByUserId(userId).forEach(platform ->
+                eventPublisher.publishEvent(new PlatformTokenRevokeEvent(platform.getRefreshToken())));
         userPlatformRepository.deleteAllByUserId(userId);
 
         // 차단 기록 삭제

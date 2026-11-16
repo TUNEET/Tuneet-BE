@@ -14,9 +14,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -55,6 +57,21 @@ public class MusicCatalogService {
         }
         Map<String, Artist> artists = findArtists(externalIds);
         return externalIds.stream().map(artists::get).toList();
+    }
+
+    // 음악 API 응답으로 이미 받은 곡을 저장하고 MBID별로 반환 (batch 조회 생략)
+    public Map<String, Music> getOrCreateMusicsFrom(List<MusicSearchItemResponse> items) {
+        List<String> externalIds = items.stream().map(MusicSearchItemResponse::id).distinct().toList();
+        if (externalIds.isEmpty()) {
+            return Map.of();
+        }
+        Set<String> missing = new HashSet<>(missingFrom(findMusics(externalIds), externalIds));
+        if (!missing.isEmpty()) {
+            Map<String, MusicSearchItemResponse> unique = new LinkedHashMap<>();
+            items.stream().filter(item -> missing.contains(item.id())).forEach(item -> unique.putIfAbsent(item.id(), item));
+            saveMusics(List.copyOf(unique.values()));
+        }
+        return findMusics(externalIds);
     }
 
     private void saveMusics(List<MusicSearchItemResponse> items) {
