@@ -65,9 +65,7 @@ class RoomPlaylistServiceTest {
     private RoomPlaylistService roomPlaylistService;
 
     private Room givenRoomAsMember() {
-        Room room = room();
-        given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID)).willReturn(room);
-        return room;
+        return givenMember(RoomRole.MEMBER);
     }
 
     private Room givenMember(RoomRole role) {
@@ -188,7 +186,7 @@ class RoomPlaylistServiceTest {
         void roomNotFound() {
             // given
             given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "나")));
-            given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID))
+            given(roomMemberReader.getMember(ROOM_ID, USER_ID))
                     .willThrow(new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
 
             // when & then
@@ -205,7 +203,7 @@ class RoomPlaylistServiceTest {
         void notMember() {
             // given
             given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, "나")));
-            given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID))
+            given(roomMemberReader.getMember(ROOM_ID, USER_ID))
                     .willThrow(new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
 
             // when & then
@@ -242,10 +240,46 @@ class RoomPlaylistServiceTest {
         }
 
         @Test
+        @DisplayName("멤버는 내가 추가한 곡만 isMine, deletable이 true이다")
+        void memberFlags() {
+            // given
+            Room room = givenMember(RoomRole.MEMBER);
+            given(roomPlaylistRepository.findByRoomOrderByPositionAscIdAsc(room)).willReturn(List.of(
+                    playlist(31L, room, user(USER_ID, "나"), music(7L, "Hype Boy"), 1),
+                    playlist(32L, room, user(2L, "다른 멤버"), music(8L, "Ditto"), 2)));
+
+            // when
+            RoomPlaylistListResponse response = roomPlaylistService.getAllRoomPlaylists(ROOM_ID, USER_ID);
+
+            // then
+            assertThat(response.getPlaylists())
+                    .extracting(RoomPlaylistResponse::getIsMine, RoomPlaylistResponse::getDeletable)
+                    .containsExactly(tuple(true, true), tuple(false, false));
+        }
+
+        @Test
+        @DisplayName("방장은 다른 멤버가 추가한 곡도 deletable이 true이다 (isMine은 false)")
+        void ownerFlags() {
+            // given
+            Room room = givenMember(RoomRole.OWNER);
+            given(roomPlaylistRepository.findByRoomOrderByPositionAscIdAsc(room)).willReturn(List.of(
+                    playlist(31L, room, user(USER_ID, "나"), music(7L, "Hype Boy"), 1),
+                    playlist(32L, room, user(2L, "다른 멤버"), music(8L, "Ditto"), 2)));
+
+            // when
+            RoomPlaylistListResponse response = roomPlaylistService.getAllRoomPlaylists(ROOM_ID, USER_ID);
+
+            // then
+            assertThat(response.getPlaylists())
+                    .extracting(RoomPlaylistResponse::getIsMine, RoomPlaylistResponse::getDeletable)
+                    .containsExactly(tuple(true, true), tuple(false, true));
+        }
+
+        @Test
         @DisplayName("방 멤버가 아니면 NOT_ROOM_MEMBER 예외가 발생하고 목록을 조회하지 않는다")
         void notMember() {
             // given
-            given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID))
+            given(roomMemberReader.getMember(ROOM_ID, USER_ID))
                     .willThrow(new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
 
             // when & then
@@ -444,7 +478,7 @@ class RoomPlaylistServiceTest {
         @DisplayName("방 멤버가 아니면 NOT_ROOM_MEMBER 예외가 발생하고 목록을 조회하지 않는다")
         void notMember() {
             // given
-            given(roomMemberReader.getRoomAsMember(ROOM_ID, USER_ID))
+            given(roomMemberReader.getMember(ROOM_ID, USER_ID))
                     .willThrow(new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
 
             // when & then

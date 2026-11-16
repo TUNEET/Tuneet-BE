@@ -24,11 +24,21 @@ public class RoomPlaylistResponse {
     @Schema(description = "노래 정보")
     private MusicResponse music;
 
-    public static RoomPlaylistResponse from(RoomPlaylist roomPlaylist) {
+    @Schema(description = "내가 추가한 곡인지", example = "true")
+    private Boolean isMine;
+
+    @Schema(description = "내가 삭제할 수 있는 곡인지 (방장이거나 내가 추가한 곡). 삭제 버튼은 이 값으로 표시", example = "true")
+    private Boolean deletable;
+
+    public static RoomPlaylistResponse from(RoomPlaylist roomPlaylist, Long userId, boolean isOwner) {
+        boolean isMine = roomPlaylist.getUser().getId().equals(userId);
+
         return RoomPlaylistResponse.builder()
                 .roomPlaylistId(roomPlaylist.getId())
                 .position(roomPlaylist.getPosition())
                 .music(MusicResponse.from(roomPlaylist.getMusic()))
+                .isMine(isMine)
+                .deletable(isOwner || isMine)
                 .build();
     }
 }

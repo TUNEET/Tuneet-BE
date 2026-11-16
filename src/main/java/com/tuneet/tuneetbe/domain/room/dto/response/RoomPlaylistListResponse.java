@@ -19,9 +19,9 @@ public class RoomPlaylistListResponse {
     @Schema(description = "플레이리스트 곡 목록 (position 순)")
     private List<RoomPlaylistResponse> playlists;
 
-    public static RoomPlaylistListResponse from(List<RoomPlaylist> playlists) {
+    public static RoomPlaylistListResponse from(List<RoomPlaylist> playlists, Long userId, boolean isOwner) {
         return RoomPlaylistListResponse.builder()
-                .playlists(playlists.stream().map(RoomPlaylistResponse::from).toList())
+                .playlists(playlists.stream().map(playlist -> RoomPlaylistResponse.from(playlist, userId, isOwner)).toList())
                 .build();
     }
 }
