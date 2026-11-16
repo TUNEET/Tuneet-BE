@@ -1,5 +1,7 @@
 package com.tuneet.tuneetbe.domain.room.service;
 
+import com.tuneet.tuneetbe.domain.matching.service.TasteMatch;
+import com.tuneet.tuneetbe.domain.matching.service.TasteMatchService;
 import com.tuneet.tuneetbe.domain.room.dto.request.RoomCreateRequest;
 import com.tuneet.tuneetbe.domain.room.dto.request.RoomEntryRequest;
 import com.tuneet.tuneetbe.domain.room.dto.response.*;
@@ -27,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -46,6 +49,7 @@ public class RoomService {
     private final RoomPlaylistRepository roomPlaylistRepository;
     private final RoomMemberReader roomMemberReader;
     private final RoomRemover roomRemover;
+    private final TasteMatchService tasteMatchService;
 
     private static final Comparator<RoomUser> OWNER_FIRST =
             Comparator.comparing((RoomUser ru) -> ru.getRole() != RoomRole.OWNER)
@@ -191,6 +195,10 @@ public class RoomService {
                 .findFirst()
                 .orElseThrow(() -> new CustomException(RoomErrorCode.NOT_ROOM_MEMBER));
 
+        // 멤버별 매칭률과 거리 구간 (한 번에 계산)
+        Map<Long, TasteMatch> matches = tasteMatchService.match(myRoomUser.getUser(),
+                roomUserList.stream().map(RoomUser::getUser).toList());
+
         return RoomUserListResponse.builder()
                 .roomId(room.getId())
                 .roomTitle(room.getRoomTitle())
@@ -199,7 +207,7 @@ public class RoomService {
                         // 본인 제외
                         .filter(ru -> ru != myRoomUser)
                         .sorted(OWNER_FIRST)
-                        .map(RoomUserResponse::from)
+                        .map(ru -> RoomUserResponse.from(ru, matches.get(ru.getUser().getId())))
                         .toList())
                 .build();
 

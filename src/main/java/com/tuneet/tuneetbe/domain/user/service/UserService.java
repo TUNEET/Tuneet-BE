@@ -6,6 +6,9 @@ import com.tuneet.tuneetbe.domain.music.dto.response.ArtistResponse;
 import com.tuneet.tuneetbe.domain.music.dto.response.GenreResponse;
 import com.tuneet.tuneetbe.domain.music.dto.response.MusicResponse;
 import com.tuneet.tuneetbe.domain.music.entity.Genre;
+import com.tuneet.tuneetbe.domain.matching.repository.UserRecommendationRepository;
+import com.tuneet.tuneetbe.domain.matching.service.TasteMatch;
+import com.tuneet.tuneetbe.domain.matching.service.TasteMatchService;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
 import com.tuneet.tuneetbe.domain.notification.repository.DeviceTokenRepository;
@@ -73,6 +76,8 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final UserMusicLikeRepository userMusicLikeRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final TasteMatchService tasteMatchService;
+    private final UserRecommendationRepository userRecommendationRepository;
 
     // 회원가입
     @Transactional
@@ -417,6 +422,14 @@ public class UserService {
             commonMusic = targetProfileMusic;
         }
 
+        // 매칭률과 거리 구간 계산 (내가 위치 노출을 껐으면 둘 다 null)
+        TasteMatch match = tasteMatchService.match(loginUser, List.of(targetUser)).get(targetUserId);
+
+        // 프로필 음악이 다르면 좋아하는 노래, 좋아요한 노래 중 같은 곡
+        if (commonMusic == null && match != null && !match.commonMusics().isEmpty()) {
+            commonMusic = match.commonMusics().getFirst();
+        }
+
         // 함께 좋아하는 항목 세팅
         UserProfileResponse.Common common = UserProfileResponse.Common.builder()
                 .artists(toArtistResponses(commonUserArtists))
@@ -432,10 +445,8 @@ public class UserService {
                 .profileMusic(toMusicResponse(targetProfileMusic))
                 .genres(genreResponses)
                 .favoriteArtists(toArtistResponses(targetUserArtists))
-                // TODO: 매칭 구현 후 유사도 계산
-                .similarity(null)
-                // TODO: 위치 갱신 구현 후 거리 계산 (위치 노출을 끈 사용자는 null)
-                .distanceRange(null)
+                .matchPercent(match == null ? null : match.matchPercent())
+                .distanceRange(match == null ? null : match.distanceRange())
                 .letterReceivable(targetUser.getLetterReceivable())
                 .isBlocked(userBlockRepository.existsByBlockerIdAndBlockedId(loginUserId, targetUserId))
                 .common(common)
@@ -473,6 +484,9 @@ public class UserService {
 
         // 차단 기록 삭제
         userBlockRepository.deleteAllByBlockerIdOrBlockedId(userId, userId);
+
+        // 받은 추천과 다른 사용자에게 추천된 기록 삭제
+        userRecommendationRepository.deleteAllByUserIdOrRecommendedUserId(userId, userId);
 
         // 받은 알림 삭제
         notificationRepository.deleteAllByReceiverId(userId);

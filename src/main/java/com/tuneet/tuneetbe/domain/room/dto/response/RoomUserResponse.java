@@ -1,9 +1,11 @@
 package com.tuneet.tuneetbe.domain.room.dto.response;
 
+import com.tuneet.tuneetbe.domain.matching.service.TasteMatch;
 import com.tuneet.tuneetbe.domain.music.dto.response.MusicResponse;
 import com.tuneet.tuneetbe.domain.room.entity.RoomUser;
 import com.tuneet.tuneetbe.domain.room.enums.RoomRole;
 import com.tuneet.tuneetbe.domain.user.entity.User;
+import com.tuneet.tuneetbe.domain.user.enums.DistanceRange;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -32,16 +34,18 @@ public class RoomUserResponse {
     @Schema(description = "프로필 음악", nullable = true)
     private MusicResponse music;
 
-    @Schema(description = "나와의 매칭률 (%)", example = "87")
-    private Long matchPercent;
+    @Schema(description = "나와의 매칭률 (0~100). 내가 위치 미동의·위치 노출 OFF이거나 한쪽의 취향 데이터가 없으면 null", example = "87", nullable = true)
+    private Integer matchPercent;
 
     // TODO 거리 표기
     // 1km 이내
     // 3km 이내
     // 5km 이내
     // 5km 이상 -> 서비스 규약상 이런식으로 해야함
+    @Schema(description = "거리 구간. 나 또는 상대가 위치 미동의·위치 노출 OFF이거나 위치가 없으면 null", example = "WITHIN_3KM", nullable = true)
+    private DistanceRange distanceRange;
 
-    public static RoomUserResponse from(RoomUser roomUser) {
+    public static RoomUserResponse from(RoomUser roomUser, TasteMatch match) {
 
         User user = roomUser.getUser();
 
@@ -51,7 +55,8 @@ public class RoomUserResponse {
                 .nickname(user.getNickname())
                 .role(roomUser.getRole())
                 .music(user.getProfileMusic() == null ? null : MusicResponse.from(user.getProfileMusic()))
-                .matchPercent(100L) // TODO 매칭 기능 구현 후 리팩토링
+                .matchPercent(match == null ? null : match.matchPercent())
+                .distanceRange(match == null ? null : match.distanceRange())
                 .build();
     }
 }
