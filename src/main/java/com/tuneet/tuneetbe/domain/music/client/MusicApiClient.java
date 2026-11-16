@@ -1,6 +1,8 @@
 package com.tuneet.tuneetbe.domain.music.client;
 
+import com.tuneet.tuneetbe.domain.music.dto.request.VideoMatchItem;
 import com.tuneet.tuneetbe.domain.music.dto.response.ArtistSearchItemResponse;
+import com.tuneet.tuneetbe.domain.music.dto.response.VideoMatchResponse;
 import com.tuneet.tuneetbe.domain.music.dto.response.MusicBatchResponse;
 import com.tuneet.tuneetbe.domain.music.dto.response.MusicSearchItemResponse;
 import com.tuneet.tuneetbe.domain.music.dto.response.SearchPageResponse;
@@ -70,6 +72,21 @@ public class MusicApiClient {
         }
     }
 
+    /** 1 to 100 YouTube videos. Results come back in the same order. */
+    public VideoMatchResponse matchVideos(List<VideoMatchItem> items) {
+        String path = "/v1/musics/match";
+        try {
+            return requireBody(path, client.post()
+                    .uri(path)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(new VideoMatchRequest(items))
+                    .retrieve()
+                    .body(VideoMatchResponse.class));
+        } catch (RestClientException e) {
+            throw unavailable(path, e);
+        }
+    }
+
     public Optional<ArtistSearchItemResponse> getArtist(String id) {
         String path = "/v1/artists/{id}";
         try {
@@ -115,5 +132,8 @@ public class MusicApiClient {
     }
 
     private record MusicBatchRequest(List<String> ids) {
+    }
+
+    private record VideoMatchRequest(List<VideoMatchItem> items) {
     }
 }
