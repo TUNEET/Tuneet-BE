@@ -43,7 +43,8 @@ public class RoomPlaylistService {
 
         User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
 
-        Room room = roomMemberReader.getRoomAsMember(roomId, userId);
+        RoomUser me = roomMemberReader.getMember(roomId, userId);
+        Room room = me.getRoom();
 
         if (roomPlaylistRepository.existsByRoomAndMusic(room, music)) {
             throw new CustomException(RoomErrorCode.ROOM_PLAYLIST_DUPLICATE_MUSIC);
@@ -66,16 +67,16 @@ public class RoomPlaylistService {
             throw new CustomException(RoomErrorCode.ROOM_PLAYLIST_DUPLICATE_MUSIC);
         }
 
-        return RoomPlaylistResponse.from(savedRoomPlaylist);
+        return RoomPlaylistResponse.from(savedRoomPlaylist, userId, me.getRole() == RoomRole.OWNER);
     }
 
     public RoomPlaylistListResponse getAllRoomPlaylists(Long roomId, Long userId) {
 
-        Room room = roomMemberReader.getRoomAsMember(roomId, userId);
+        RoomUser me = roomMemberReader.getMember(roomId, userId);
 
-        List<RoomPlaylist> roomPlaylistList = roomPlaylistRepository.findByRoomOrderByPositionAscIdAsc(room);
+        List<RoomPlaylist> roomPlaylistList = roomPlaylistRepository.findByRoomOrderByPositionAscIdAsc(me.getRoom());
 
-        return markLiked(userId, RoomPlaylistListResponse.from(roomPlaylistList));
+        return markLiked(userId, RoomPlaylistListResponse.from(roomPlaylistList, userId, me.getRole() == RoomRole.OWNER));
     }
 
     @Transactional
@@ -115,7 +116,8 @@ public class RoomPlaylistService {
     public RoomPlaylistListResponse updateRoomPlaylistPos(Long roomId, Long userId, RoomPlaylistPosUpdateRequest request) {
 
         // 1. 방 멤버 검사
-        Room room = roomMemberReader.getRoomAsMember(roomId, userId);
+        RoomUser me = roomMemberReader.getMember(roomId, userId);
+        Room room = me.getRoom();
 
         // 2. 플레이리스트 원소 모두 가져오기
         // 업데이트가 항상 같은 순서로 나가도록 id 순으로 조회 (동시 순서 변경 데드락 방지)
@@ -135,7 +137,7 @@ public class RoomPlaylistService {
         }
 
         roomPlaylistList.sort(Comparator.comparing(RoomPlaylist::getPosition));
-        return markLiked(userId, RoomPlaylistListResponse.from(roomPlaylistList));
+        return markLiked(userId, RoomPlaylistListResponse.from(roomPlaylistList, userId, me.getRole() == RoomRole.OWNER));
     }
 
     // 내가 좋아요한 곡 표시

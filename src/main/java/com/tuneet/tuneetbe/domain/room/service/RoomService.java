@@ -337,7 +337,9 @@ public class RoomService {
                         .map(RoomUserSummaryResponse::from)
                         .toList())
                 .roomPosts(roomPostList.stream().map(roomPost -> RoomPostResponse.from(roomPost, userId, roomUserIds)).toList())
-                .roomPlaylists(roomPlaylistList.stream().map(RoomPlaylistResponse::from).toList())
+                .roomPlaylists(roomPlaylistList.stream()
+                        .map(roomPlaylist -> RoomPlaylistResponse.from(roomPlaylist, userId, myRole == RoomRole.OWNER))
+                        .toList())
                 .build();
     }
 
