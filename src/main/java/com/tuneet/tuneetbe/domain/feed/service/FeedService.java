@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.feed.service;
 
+import com.tuneet.tuneetbe.domain.like.service.MusicLikeMarker;
 import com.tuneet.tuneetbe.domain.feed.dto.response.*;
 import com.tuneet.tuneetbe.domain.feed.entity.Feed;
 import com.tuneet.tuneetbe.domain.feed.entity.FeedMessage;
@@ -42,6 +43,7 @@ public class FeedService {
     private final NotificationRepository notificationRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final UserBlockRepository userBlockRepository;
+    private final MusicLikeMarker musicLikeMarker;
 
     // 피드 작성
     @Transactional
@@ -90,8 +92,12 @@ public class FeedService {
             throw new CustomException(UserErrorCode.BLOCKED_USER);
         }
 
+        // 내가 좋아요한 곡 표시
+        FeedDetailResponse response = toFeedDetailResponse(userId, feed);
+        musicLikeMarker.mark(userId, List.of(response.getMusic()));
+
         // 응답 반환
-        return toFeedDetailResponse(userId, feed);
+        return response;
     }
 
     // Feed 엔티티를 응답 dto로 변환
@@ -150,6 +156,9 @@ public class FeedService {
         for (Feed feed : feeds.getContent()) {
             feedResponses.add(toFeedDetailResponse(userId, feed));
         }
+
+        // 내가 좋아요한 곡 표시
+        musicLikeMarker.mark(userId, feedResponses.stream().map(FeedDetailResponse::getMusic).toList());
 
         // 응답 반환
         return FeedListResponse.builder()
@@ -323,6 +332,9 @@ public class FeedService {
         for (FeedMessage feedMessage : feedMessages.getContent()) {
             messageResponses.add(toSentFeedMessageResponse(feedMessage));
         }
+
+        // 내가 좋아요한 곡 표시
+        musicLikeMarker.mark(userId, messageResponses.stream().map(SentFeedMessageResponse::getMusic).toList());
 
         // 응답 반환
         return SentFeedMessageListResponse.builder()

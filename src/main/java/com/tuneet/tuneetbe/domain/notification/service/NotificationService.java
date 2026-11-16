@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.notification.service;
 
+import com.tuneet.tuneetbe.domain.like.service.MusicLikeMarker;
 import com.tuneet.tuneetbe.domain.feed.entity.FeedMessage;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
 import com.tuneet.tuneetbe.domain.music.dto.response.MusicResponse;
@@ -31,6 +32,7 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final FeedMessageRepository feedMessageRepository;
+    private final MusicLikeMarker musicLikeMarker;
 
     // 알림 목록 조회
     public NotificationListResponse getNotifications(Long userId, Long cursor, int size) {
@@ -87,6 +89,9 @@ public class NotificationService {
 
             notificationResponses.add(toNotificationResponse(notification, feedMessage));
         }
+
+        // 내가 좋아요한 곡 표시
+        musicLikeMarker.mark(userId, notificationResponses.stream().map(NotificationResponse::getMusic).toList());
 
         // 응답 반환
         return NotificationListResponse.builder()

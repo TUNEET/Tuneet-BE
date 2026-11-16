@@ -60,7 +60,7 @@ public class UserProfileResponse {
     @Schema(title = "함께 좋아하는 항목 응답 dto", description = "나와 다른 사용자가 함께 좋아하는 아티스트, 노래, 장르")
     public static class Common {
 
-        @Schema(description = "함께 좋아하는 아티스트 목록")
+        @Schema(description = "함께 좋아하는 아티스트 목록 (선호 아티스트와 좋아요한 아티스트를 합쳐 비교)")
         private List<ArtistResponse> artists;
 
         @Schema(description = "함께 좋아하는 노래 (프로필 음악이 같으면 그 곡, 아니면 좋아하는 노래·좋아요한 노래 중 같은 곡 하나)", nullable = true)

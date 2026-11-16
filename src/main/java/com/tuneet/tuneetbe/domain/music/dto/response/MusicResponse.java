@@ -26,6 +26,14 @@ public class MusicResponse {
     @Schema(description = "앨범 커버 이미지 url", example = "https://...")
     private String musicPicture;
 
+    @Schema(description = "내가 좋아요한 곡인지 (같은 곡의 다른 음원, 유튜브에서 불러온 좋아요 포함). 목록·상세 조회에서만 채우고 그 외 응답은 null",
+            example = "true", nullable = true)
+    private Boolean liked;
+
+    public void markLiked(boolean liked) {
+        this.liked = liked;
+    }
+
     public static MusicResponse from(Music music) {
         return MusicResponse.builder()
                 .musicId(music.getExternalId())

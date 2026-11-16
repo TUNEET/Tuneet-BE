@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.matching.service;
 
+import com.tuneet.tuneetbe.domain.like.repository.UserArtistLikeRepository;
 import com.tuneet.tuneetbe.domain.matching.util.DistanceCalculator;
 import com.tuneet.tuneetbe.domain.music.entity.Artist;
 import com.tuneet.tuneetbe.domain.music.entity.Genre;
@@ -37,6 +38,7 @@ public class TasteMatchService {
     private final UserArtistRepository userArtistRepository;
     private final UserGenreRepository userGenreRepository;
     private final UserBlockRepository userBlockRepository;
+    private final UserArtistLikeRepository userArtistLikeRepository;
 
     public Map<Long, TasteMatch> match(User me, Collection<User> targets) {
         Map<Long, TasteMatch> result = new HashMap<>();
@@ -57,12 +59,15 @@ public class TasteMatchService {
                     .forEach(like -> addMusic(commonMusics, like.getUser().getId(), like.getMusic()));
         }
 
-        // 아티스트
-        List<Long> myArtistIds = userArtistRepository.findArtistIdsByUserId(me.getId());
-        Map<Long, List<Artist>> commonArtists = new HashMap<>();
+        // 아티스트: 선호 아티스트 + 좋아요한 아티스트 (같은 아티스트는 한 번)
+        Set<Long> myArtistIds = new HashSet<>(userArtistRepository.findArtistIdsByUserId(me.getId()));
+        myArtistIds.addAll(userArtistLikeRepository.findArtistIdsByUserId(me.getId()));
+        Map<Long, Map<Long, Artist>> commonArtistsById = new HashMap<>();
         if (!myArtistIds.isEmpty()) {
             userArtistRepository.findAllByUserIdInAndArtistIdInOrderByIdAsc(otherIds, myArtistIds)
-                    .forEach(ua -> commonArtists.computeIfAbsent(ua.getUser().getId(), id -> new ArrayList<>()).add(ua.getArtist()));
+                    .forEach(ua -> addArtist(commonArtistsById, ua.getUser().getId(), ua.getArtist()));
+            userArtistLikeRepository.findAllByUserIdInAndArtistIdInOrderByIdAsc(otherIds, myArtistIds)
+                    .forEach(like -> addArtist(commonArtistsById, like.getUser().getId(), like.getArtist()));
         }
 
         // 장르 (표시 순서대로)
@@ -88,7 +93,7 @@ public class TasteMatchService {
         for (User other : others) {
             Long id = other.getId();
             List<Music> musics = List.copyOf(commonMusics.getOrDefault(id, Map.of()).values());
-            List<Artist> artists = commonArtists.getOrDefault(id, List.of());
+            List<Artist> artists = List.copyOf(commonArtistsById.getOrDefault(id, Map.of()).values());
             List<Genre> otherGenres = genres.getOrDefault(id, List.of());
             List<Genre> sharedGenres = otherGenres.stream().filter(genre -> myGenreIds.contains(genre.getId())).toList();
             int genreUnion = myGenres.size() + otherGenres.size() - sharedGenres.size();
@@ -135,10 +140,15 @@ public class TasteMatchService {
         return blockedIds;
     }
 
+    private static void addArtist(Map<Long, Map<Long, Artist>> commonArtists, Long userId, Artist artist) {
+        commonArtists.computeIfAbsent(userId, id -> new LinkedHashMap<>()).putIfAbsent(artist.getId(), artist);
+    }
+
     // 장르, 아티스트, 노래, 좋아요 중 하나라도 있는 사용자
     private Set<Long> findUsersWithTaste(List<Long> userIds, Map<Long, List<Genre>> genres) {
         Set<Long> withTaste = new HashSet<>(genres.keySet());
         withTaste.addAll(userArtistRepository.findUserIdsHavingArtist(userIds));
+        withTaste.addAll(userArtistLikeRepository.findUserIdsHavingArtistLike(userIds));
         withTaste.addAll(userMusicRepository.findUserIdsHavingMusic(userIds));
         withTaste.addAll(userMusicLikeRepository.findUserIdsHavingLike(userIds));
         return withTaste;

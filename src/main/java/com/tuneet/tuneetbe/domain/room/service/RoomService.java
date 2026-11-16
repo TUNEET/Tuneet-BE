@@ -1,5 +1,7 @@
 package com.tuneet.tuneetbe.domain.room.service;
 
+import com.tuneet.tuneetbe.domain.music.dto.response.MusicResponse;
+import com.tuneet.tuneetbe.domain.like.service.MusicLikeMarker;
 import com.tuneet.tuneetbe.domain.matching.service.TasteMatch;
 import com.tuneet.tuneetbe.domain.matching.service.TasteMatchService;
 import com.tuneet.tuneetbe.domain.room.dto.request.RoomCreateRequest;
@@ -50,6 +52,7 @@ public class RoomService {
     private final RoomMemberReader roomMemberReader;
     private final RoomRemover roomRemover;
     private final TasteMatchService tasteMatchService;
+    private final MusicLikeMarker musicLikeMarker;
 
     private static final Comparator<RoomUser> OWNER_FIRST =
             Comparator.comparing((RoomUser ru) -> ru.getRole() != RoomRole.OWNER)
@@ -176,7 +179,14 @@ public class RoomService {
         // 플레이리스트 불러오기
         List<RoomPlaylist> roomPlaylistList = roomPlaylistRepository.findTop2ByRoomOrderByPositionAscIdAsc(room);
 
-        return generateRoomHomeResponse(room, myRoomUser.getRole(), roomUserList, roomPostList, roomPlaylistList, userId);
+        RoomHomeResponse response = generateRoomHomeResponse(room, myRoomUser.getRole(), roomUserList, roomPostList, roomPlaylistList, userId);
+
+        // 내가 좋아요한 곡 표시
+        List<MusicResponse> musics = new ArrayList<>();
+        response.getRoomPosts().forEach(post -> musics.add(post.getMusic()));
+        response.getRoomPlaylists().forEach(playlist -> musics.add(playlist.getMusic()));
+        musicLikeMarker.mark(userId, musics);
+        return response;
 
     }
 

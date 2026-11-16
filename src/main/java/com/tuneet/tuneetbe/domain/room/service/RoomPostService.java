@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.room.service;
 
+import com.tuneet.tuneetbe.domain.like.service.MusicLikeMarker;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.room.dto.response.RoomPostListResponse;
 import com.tuneet.tuneetbe.domain.room.dto.response.RoomPostResponse;
@@ -32,6 +33,7 @@ public class RoomPostService {
     private final UserRepository userRepository;
     private final RoomMemberReader roomMemberReader;
     private final RoomUserRepository roomUserRepository;
+    private final MusicLikeMarker musicLikeMarker;
 
     @Transactional
     public RoomPostResponse createRoomPost(Long roomId, Long userId, Music music, String content){
@@ -66,7 +68,11 @@ public class RoomPostService {
         // 나간 멤버 표시용
         Set<Long> roomUserIds = roomUserRepository.findUserIdsByRoomId(roomId);
 
-        return RoomPostListResponse.from(posts, userId, roomUserIds);
+        RoomPostListResponse response = RoomPostListResponse.from(posts, userId, roomUserIds);
+
+        // 내가 좋아요한 곡 표시
+        musicLikeMarker.mark(userId, response.getRoomPosts().stream().map(RoomPostResponse::getMusic).toList());
+        return response;
     }
 
     @Transactional

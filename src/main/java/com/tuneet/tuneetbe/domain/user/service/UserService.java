@@ -6,9 +6,11 @@ import com.tuneet.tuneetbe.domain.music.dto.response.ArtistResponse;
 import com.tuneet.tuneetbe.domain.music.dto.response.GenreResponse;
 import com.tuneet.tuneetbe.domain.music.dto.response.MusicResponse;
 import com.tuneet.tuneetbe.domain.music.entity.Genre;
+import com.tuneet.tuneetbe.domain.like.repository.UserArtistLikeRepository;
 import com.tuneet.tuneetbe.domain.matching.repository.UserRecommendationRepository;
 import com.tuneet.tuneetbe.domain.matching.service.TasteMatch;
 import com.tuneet.tuneetbe.domain.matching.service.TasteMatchService;
+import com.tuneet.tuneetbe.domain.music.entity.Artist;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.music.repository.GenreRepository;
 import com.tuneet.tuneetbe.domain.notification.repository.DeviceTokenRepository;
@@ -78,6 +80,7 @@ public class UserService {
     private final ApplicationEventPublisher eventPublisher;
     private final TasteMatchService tasteMatchService;
     private final UserRecommendationRepository userRecommendationRepository;
+    private final UserArtistLikeRepository userArtistLikeRepository;
 
     // 회원가입
     @Transactional
@@ -430,9 +433,21 @@ public class UserService {
             commonMusic = match.commonMusics().getFirst();
         }
 
+        // 함께 좋아하는 아티스트에 좋아요한 아티스트로 겹치는 아티스트 추가 (매칭률과 같은 기준, 같은 아티스트는 한 번)
+        List<ArtistResponse> commonArtistResponses = toArtistResponses(commonUserArtists);
+        if (match != null) {
+            Set<String> addedArtistIds = new HashSet<>();
+            commonArtistResponses.forEach(artist -> addedArtistIds.add(artist.getArtistId()));
+            for (Artist artist : match.commonArtists()) {
+                if (addedArtistIds.add(artist.getExternalId())) {
+                    commonArtistResponses.add(ArtistResponse.from(artist));
+                }
+            }
+        }
+
         // 함께 좋아하는 항목 세팅
         UserProfileResponse.Common common = UserProfileResponse.Common.builder()
-                .artists(toArtistResponses(commonUserArtists))
+                .artists(commonArtistResponses)
                 .music(toMusicResponse(commonMusic))
                 .genres(commonGenreResponses)
                 .build();
@@ -476,6 +491,7 @@ public class UserService {
         userArtistRepository.deleteAllByUserId(userId);
         userMusicRepository.deleteAllByUserId(userId);
         userMusicLikeRepository.deleteAllByUserId(userId);
+        userArtistLikeRepository.deleteAllByUserId(userId);
 
         // 커밋 후 연동한 플랫폼의 Google 토큰 폐기
         userPlatformRepository.findAllByUserId(userId).forEach(platform ->
