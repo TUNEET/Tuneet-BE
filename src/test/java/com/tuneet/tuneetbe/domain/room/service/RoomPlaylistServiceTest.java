@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.room.service;
 
+import com.tuneet.tuneetbe.domain.like.service.MusicLikeMarker;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.room.dto.request.RoomPlaylistPosUpdateRequest;
 import com.tuneet.tuneetbe.domain.room.dto.response.RoomPlaylistListResponse;
@@ -56,6 +57,9 @@ class RoomPlaylistServiceTest {
 
     @Mock
     private RoomMemberReader roomMemberReader;
+
+    @Mock
+    private MusicLikeMarker musicLikeMarker;
 
     @InjectMocks
     private RoomPlaylistService roomPlaylistService;

@@ -1,5 +1,7 @@
 package com.tuneet.tuneetbe.domain.matching.service;
 
+import com.tuneet.tuneetbe.domain.like.entity.UserArtistLike;
+import com.tuneet.tuneetbe.domain.like.repository.UserArtistLikeRepository;
 import com.tuneet.tuneetbe.domain.music.entity.Artist;
 import com.tuneet.tuneetbe.domain.music.entity.Genre;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
@@ -57,12 +59,15 @@ class TasteMatchServiceTest {
     @Mock
     private UserBlockRepository userBlockRepository;
 
+    @Mock
+    private UserArtistLikeRepository userArtistLikeRepository;
+
     private TasteMatchService service;
 
     @BeforeEach
     void setUp() {
         service = new TasteMatchService(userMusicRepository, userMusicLikeRepository, userArtistRepository, userGenreRepository,
-                userBlockRepository);
+                userBlockRepository, userArtistLikeRepository);
     }
 
     // 위치 동의, 위치 노출을 켜고 위치를 저장한 사용자
@@ -126,6 +131,32 @@ class TasteMatchServiceTest {
         assertThat(match.commonArtists()).hasSize(1);
         assertThat(match.commonGenres()).hasSize(3);
         assertThat(match.distanceRange()).isEqualTo(DistanceRange.WITHIN_1KM);
+    }
+
+    @Test
+    @DisplayName("선호 아티스트와 좋아요한 아티스트를 합쳐 비교하고 같은 아티스트는 한 번만 센다")
+    void artistLikes() {
+        User me = user(1L);
+        User other = user(2L);
+        given(userArtistRepository.findArtistIdsByUserId(1L)).willReturn(List.of(7L));
+        given(userArtistLikeRepository.findArtistIdsByUserId(1L)).willReturn(List.of(8L));
+        given(userArtistRepository.findAllByUserIdInAndArtistIdInOrderByIdAsc(any(), any()))
+                .willReturn(List.of(userArtist(other, 8L)));
+        UserArtistLike otherLike = BeanUtils.instantiateClass(UserArtistLike.class);
+        ReflectionTestUtils.setField(otherLike, "user", other);
+        ReflectionTestUtils.setField(otherLike, "artist", userArtist(other, 8L).getArtist());
+        UserArtistLike otherLike7 = BeanUtils.instantiateClass(UserArtistLike.class);
+        ReflectionTestUtils.setField(otherLike7, "user", other);
+        ReflectionTestUtils.setField(otherLike7, "artist", userArtist(other, 7L).getArtist());
+        given(userArtistLikeRepository.findAllByUserIdInAndArtistIdInOrderByIdAsc(any(), any()))
+                .willReturn(List.of(otherLike, otherLike7));
+        given(userArtistLikeRepository.findUserIdsHavingArtistLike(any())).willReturn(List.of(2L));
+
+        TasteMatch match = service.match(me, List.of(other)).get(2L);
+
+        // 아티스트 8(선호·좋아요 중복), 7 → 2명, 0.4 * 0.75 = 30%
+        assertThat(match.commonArtists()).extracting(Artist::getId).containsExactly(8L, 7L);
+        assertThat(match.matchPercent()).isEqualTo(30);
     }
 
     @Test

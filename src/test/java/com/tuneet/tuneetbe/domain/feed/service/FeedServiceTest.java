@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.feed.service;
 
+import com.tuneet.tuneetbe.domain.like.service.MusicLikeMarker;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedCreateResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedDetailResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedListResponse;
@@ -78,6 +79,9 @@ class FeedServiceTest {
 
     @Mock
     private UserBlockRepository userBlockRepository;
+
+    @Mock
+    private MusicLikeMarker musicLikeMarker;
 
     @InjectMocks
     private FeedService feedService;
