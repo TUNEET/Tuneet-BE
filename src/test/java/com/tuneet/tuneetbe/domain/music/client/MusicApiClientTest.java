@@ -1,6 +1,7 @@
 package com.tuneet.tuneetbe.domain.music.client;
 
 import com.sun.net.httpserver.HttpServer;
+import com.tuneet.tuneetbe.domain.music.dto.request.VideoMatchItem;
 import com.tuneet.tuneetbe.domain.music.exception.MusicErrorCode;
 import com.tuneet.tuneetbe.global.exception.CustomException;
 import org.junit.jupiter.api.AfterEach;
@@ -157,5 +158,39 @@ class MusicApiClientTest {
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(MusicErrorCode.MUSIC_API_UNAVAILABLE);
+    }
+
+    @Test
+    @DisplayName("영상 매칭은 제목과 채널을 보내고 결과를 같은 순서로 변환한다")
+    void matchVideos() {
+        AtomicReference<String> body = new AtomicReference<>();
+        server.createContext("/v1/musics/match", exchange -> {
+            body.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] bytes = """
+                    {"results":[{"videoId":"v1","status":"matched","stage":"artist_title","score":100.0,
+                    "isCover":true,"reason":null,"music":{"id":"r1","canonicalId":"c1","title":"봄날","artist":"BTS",
+                    "artists":[{"id":"a1","name":"BTS","koreanName":"방탄소년단"}],"coverUrl":null,"isVariant":false},
+                    "candidates":[]},
+                    {"videoId":"v2","status":"unmatched","stage":null,"score":null,"isCover":false,
+                    "reason":"compilation","music":null,"candidates":[]}]}
+                    """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+
+        var response = client.matchVideos(List.of(
+                new VideoMatchItem("v1", "봄날 커버", "누군가"), new VideoMatchItem("v2", "모음", "채널")));
+
+        assertThat(body.get()).contains("\"items\"").contains("\"videoId\":\"v1\"").contains("\"channel\":\"누군가\"");
+        assertThat(response.results()).hasSize(2);
+        assertThat(response.results().get(0)).satisfies(result -> {
+            assertThat(result.isMatched()).isTrue();
+            assertThat(result.isCover()).isTrue();
+            assertThat(result.music().artists().get(0).id()).isEqualTo("a1");
+        });
+        assertThat(response.results().get(1).isMatched()).isFalse();
+        assertThat(response.results().get(1).reason()).isEqualTo("compilation");
     }
 }

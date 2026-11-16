@@ -35,6 +35,11 @@ import com.tuneet.tuneetbe.domain.user.repository.UserMusicRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserPlatformRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserRepository;
 import com.tuneet.tuneetbe.global.exception.CustomException;
+import com.tuneet.tuneetbe.domain.platform.event.PlatformTokenRevokeEvent;
+import com.tuneet.tuneetbe.domain.user.entity.UserPlatform;
+import com.tuneet.tuneetbe.domain.user.enums.Platform;
+import com.tuneet.tuneetbe.domain.user.repository.UserMusicLikeRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -110,6 +115,12 @@ class UserServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private UserMusicLikeRepository userMusicLikeRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private UserService userService;
@@ -379,10 +390,27 @@ class UserServiceTest {
             verify(userGenreRepository).deleteAllByUserId(USER_ID);
             verify(userArtistRepository).deleteAllByUserId(USER_ID);
             verify(userMusicRepository).deleteAllByUserId(USER_ID);
+            verify(userMusicLikeRepository).deleteAllByUserId(USER_ID);
             verify(userPlatformRepository).deleteAllByUserId(USER_ID);
             verify(userBlockRepository).deleteAllByBlockerIdOrBlockedId(USER_ID, USER_ID);
             verify(notificationRepository).deleteAllByReceiverId(USER_ID);
             verify(deviceTokenRepository).deleteAllByUserId(USER_ID);
+        }
+
+        @Test
+        @DisplayName("연동한 플랫폼의 토큰 폐기 이벤트를 발행한다")
+        void revokePlatformTokens() {
+            // given
+            given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(deletableUser()));
+            UserPlatform platform = UserPlatform.builder()
+                    .platform(Platform.YOUTUBE_MUSIC).refreshToken("encrypted").scope("scope").build();
+            given(userPlatformRepository.findAllByUserId(USER_ID)).willReturn(List.of(platform));
+
+            // when
+            userService.deleteUser(USER_ID);
+
+            // then
+            verify(eventPublisher).publishEvent(new PlatformTokenRevokeEvent("encrypted"));
         }
 
         @Test
