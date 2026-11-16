@@ -4,6 +4,7 @@ import com.tuneet.tuneetbe.domain.user.entity.UserGenre;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface UserGenreRepository extends JpaRepository<UserGenre, Long> {
@@ -12,6 +13,10 @@ public interface UserGenreRepository extends JpaRepository<UserGenre, Long> {
     // @EntityGraph로 장르를 함께 조회해서, 목록을 돌며 장르를 읽을 때 추가 쿼리가 생기지 않도록 함
     @EntityGraph(attributePaths = "genre")
     List<UserGenre> findAllByUserIdOrderByGenreDisplayOrderAsc(Long userId);
+
+    // 여러 사용자의 선호 장르를 장르와 함께 조회
+    @EntityGraph(attributePaths = "genre")
+    List<UserGenre> findAllByUserIdIn(Collection<Long> userIds);
 
     // 사용자의 선호 장르 전체 삭제
     void deleteAllByUserId(Long userId);

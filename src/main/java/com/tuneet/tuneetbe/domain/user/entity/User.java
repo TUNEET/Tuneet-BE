@@ -41,6 +41,8 @@ public class User extends BaseTimeEntity {
 
     private Double longitude; // 경도
 
+    private LocalDateTime locationUpdatedAt; // 위치 갱신 일시
+
     @Column(nullable = false)
     private LocalDateTime termsAgreedAt; // 서비스 이용약관 동의 일시
 
@@ -117,6 +119,7 @@ public class User extends BaseTimeEntity {
         this.locationAgreedAt = null;
         this.latitude = null;
         this.longitude = null;
+        this.locationUpdatedAt = null;
         this.locationVisible = false;
     }
 
@@ -129,11 +132,33 @@ public class User extends BaseTimeEntity {
         this.profileMusic = null;
         this.latitude = null;
         this.longitude = null;
+        this.locationUpdatedAt = null;
         this.locationAgreedAt = null;
         this.locationVisible = false;
         this.letterReceivable = false;
         this.deletedAt = deletedAt;
         clearRefreshToken();
+    }
+
+    // 현재 위치 저장 (소수 둘째 자리, 약 1km 단위로 반올림해서 거리 구간으로 정확한 위치를 추정할 수 없게 함)
+    public void updateLocation(Double latitude, Double longitude, LocalDateTime updatedAt) {
+        this.latitude = roundCoordinate(latitude);
+        this.longitude = roundCoordinate(longitude);
+        this.locationUpdatedAt = updatedAt;
+    }
+
+    private static Double roundCoordinate(Double value) {
+        return value == null ? null : Math.round(value * 100) / 100.0;
+    }
+
+    // 위치 동의와 위치 노출을 모두 켜야 매칭(추천, 거리, 매칭률) 사용 가능
+    public boolean canUseMatching() {
+        return !isDeleted() && this.locationAgreedAt != null && Boolean.TRUE.equals(this.locationVisible);
+    }
+
+    // 거리를 계산할 수 있는지 확인
+    public boolean hasVisibleLocation() {
+        return canUseMatching() && this.latitude != null && this.longitude != null;
     }
 
     // 탈퇴한 사용자인지 확인
