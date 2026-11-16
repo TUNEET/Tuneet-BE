@@ -1,5 +1,10 @@
 package com.tuneet.tuneetbe.domain.user.service;
 
+import com.tuneet.tuneetbe.domain.matching.repository.UserRecommendationRepository;
+import com.tuneet.tuneetbe.domain.matching.service.TasteMatch;
+import com.tuneet.tuneetbe.domain.matching.service.TasteMatchService;
+import com.tuneet.tuneetbe.domain.user.enums.DistanceRange;
+import java.util.Map;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.entity.Artist;
@@ -121,6 +126,12 @@ class UserServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private TasteMatchService tasteMatchService;
+
+    @Mock
+    private UserRecommendationRepository userRecommendationRepository;
 
     @InjectMocks
     private UserService userService;
@@ -296,6 +307,30 @@ class UserServiceTest {
         }
 
         @Test
+        @DisplayName("매칭률과 거리 구간을 채우고, 프로필 음악이 다르면 좋아하는 노래 중 같은 곡을 함께 좋아하는 노래로 반환한다")
+        void matchAndCommonMusic() {
+            // given
+            User loginUser = savedUser("나", null);
+            User targetUser = savedUser("산책하는 튜니", null);
+            ReflectionTestUtils.setField(targetUser, "id", TARGET_USER_ID);
+            loginUser.updateProfileMusic(music("recording-a", "song-1"));
+            targetUser.updateProfileMusic(music("recording-c", "song-2"));
+            Music shared = music("recording-d", "song-3");
+            given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.of(targetUser));
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(loginUser));
+            given(tasteMatchService.match(loginUser, List.of(targetUser))).willReturn(Map.of(TARGET_USER_ID,
+                    new TasteMatch(60, DistanceRange.WITHIN_3KM, List.of(shared), List.of(), List.of())));
+
+            // when
+            UserProfileResponse response = userService.getUserProfile(USER_ID, TARGET_USER_ID);
+
+            // then
+            assertThat(response.getMatchPercent()).isEqualTo(60);
+            assertThat(response.getDistanceRange()).isEqualTo(DistanceRange.WITHIN_3KM);
+            assertThat(response.getCommon().getMusic().getMusicId()).isEqualTo("recording-d");
+        }
+
+        @Test
         @DisplayName("탈퇴한 사용자를 조회하면 USER_NOT_FOUND 예외가 발생한다")
         void deletedUser() {
             // given
@@ -393,6 +428,7 @@ class UserServiceTest {
             verify(userMusicLikeRepository).deleteAllByUserId(USER_ID);
             verify(userPlatformRepository).deleteAllByUserId(USER_ID);
             verify(userBlockRepository).deleteAllByBlockerIdOrBlockedId(USER_ID, USER_ID);
+            verify(userRecommendationRepository).deleteAllByUserIdOrRecommendedUserId(USER_ID, USER_ID);
             verify(notificationRepository).deleteAllByReceiverId(USER_ID);
             verify(deviceTokenRepository).deleteAllByUserId(USER_ID);
         }

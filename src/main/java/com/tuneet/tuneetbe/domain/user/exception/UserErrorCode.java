@@ -20,7 +20,8 @@ public enum UserErrorCode implements BaseErrorCode {
     SELF_BLOCK_NOT_ALLOWED("U4009", "본인은 차단할 수 없습니다.", HttpStatus.BAD_REQUEST),
     ALREADY_BLOCKED("U4010", "이미 차단한 사용자입니다.", HttpStatus.CONFLICT),
     BLOCK_NOT_FOUND("U4011", "차단하지 않은 사용자입니다.", HttpStatus.NOT_FOUND),
-    BLOCKED_USER("U4012", "차단 관계인 사용자입니다.", HttpStatus.FORBIDDEN);
+    BLOCKED_USER("U4012", "차단 관계인 사용자입니다.", HttpStatus.FORBIDDEN),
+    LOCATION_NOT_VISIBLE("U4013", "위치정보 노출을 켜야 추천을 받을 수 있습니다.", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String message;

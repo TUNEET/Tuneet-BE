@@ -37,10 +37,11 @@ public class UserProfileResponse {
     @Schema(description = "좋아하는 아티스트 목록")
     private List<ArtistResponse> favoriteArtists;
 
-    @Schema(description = "유사도 (%)", example = "92")
-    private Integer similarity;
+    @Schema(description = "나와의 매칭률 (0~100, 0은 겹치는 취향 없음). 내가 위치 미동의·위치 노출 OFF이거나 한쪽의 취향 데이터가 없으면 null",
+            example = "92", nullable = true)
+    private Integer matchPercent;
 
-    @Schema(description = "거리 구간", example = "WITHIN_3KM")
+    @Schema(description = "거리 구간. 나 또는 상대가 위치 미동의·위치 노출 OFF이거나 위치가 없거나 차단 관계면 null", example = "WITHIN_3KM", nullable = true)
     private DistanceRange distanceRange;
 
     @Schema(description = "편지 받기 여부", example = "true")
@@ -62,7 +63,7 @@ public class UserProfileResponse {
         @Schema(description = "함께 좋아하는 아티스트 목록")
         private List<ArtistResponse> artists;
 
-        @Schema(description = "함께 좋아하는 노래")
+        @Schema(description = "함께 좋아하는 노래 (프로필 음악이 같으면 그 곡, 아니면 좋아하는 노래·좋아요한 노래 중 같은 곡 하나)", nullable = true)
         private MusicResponse music;
 
         @Schema(description = "함께 좋아하는 장르 목록")

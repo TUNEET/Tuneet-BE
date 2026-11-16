@@ -1,5 +1,9 @@
 package com.tuneet.tuneetbe.domain.room.service;
 
+import com.tuneet.tuneetbe.domain.matching.service.TasteMatch;
+import com.tuneet.tuneetbe.domain.matching.service.TasteMatchService;
+import com.tuneet.tuneetbe.domain.user.enums.DistanceRange;
+import java.util.Map;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.room.dto.request.RoomCreateRequest;
 import com.tuneet.tuneetbe.domain.room.dto.request.RoomEntryRequest;
@@ -85,6 +89,9 @@ class RoomServiceTest {
 
     @Mock
     private RoomRemover roomRemover;
+
+    @Mock
+    private TasteMatchService tasteMatchService;
 
     @InjectMocks
     private RoomService roomService;
@@ -646,6 +653,31 @@ class RoomServiceTest {
                             tuple(2L, RoomRole.OWNER),
                             tuple(3L, RoomRole.MEMBER));
             assertThat(response.getRoomUsers().get(0).getMusic().getTitle()).isEqualTo("Hype Boy");
+        }
+
+        @Test
+        @DisplayName("멤버마다 나와의 매칭률과 거리 구간을 채운다")
+        void matchPercentAndDistance() {
+            // given
+            Room room = room();
+            User me = user(USER_ID, "나");
+            User other = user(3L, "멤버");
+            List<RoomUser> members = List.of(
+                    member(room, 10L, me, RoomRole.OWNER),
+                    member(room, 11L, other, RoomRole.MEMBER));
+            given(roomRepository.findById(ROOM_ID)).willReturn(Optional.of(room));
+            given(roomUserRepository.findAllWithProfileMusicByRoomOrderByIdAsc(room)).willReturn(members);
+            given(tasteMatchService.match(me, List.of(me, other))).willReturn(Map.of(3L,
+                    new TasteMatch(81, DistanceRange.WITHIN_3KM, List.of(), List.of(), List.of())));
+
+            // when
+            RoomUserListResponse response = roomService.getRoomUserList(ROOM_ID, USER_ID);
+
+            // then
+            assertThat(response.getRoomUsers()).singleElement().satisfies(member -> {
+                assertThat(member.getMatchPercent()).isEqualTo(81);
+                assertThat(member.getDistanceRange()).isEqualTo(DistanceRange.WITHIN_3KM);
+            });
         }
 
         @Test
