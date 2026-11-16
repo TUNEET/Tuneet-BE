@@ -143,8 +143,16 @@ public class User extends BaseTimeEntity {
     // 현재 위치 저장 (소수 둘째 자리, 약 1km 단위로 반올림해서 거리 구간으로 정확한 위치를 추정할 수 없게 함)
     public void updateLocation(Double latitude, Double longitude, LocalDateTime updatedAt) {
         this.latitude = roundCoordinate(latitude);
-        this.longitude = roundCoordinate(longitude);
+        this.longitude = normalizeLongitude(roundCoordinate(longitude));
         this.locationUpdatedAt = updatedAt;
+    }
+
+    // 경도 -180과 180은 같은 경선 (MySQL ST_Distance_Sphere는 -180을 받지 않음)
+    private static Double normalizeLongitude(Double longitude) {
+        if (longitude != null && longitude == -180.0) {
+            return 180.0;
+        }
+        return longitude;
     }
 
     private static Double roundCoordinate(Double value) {

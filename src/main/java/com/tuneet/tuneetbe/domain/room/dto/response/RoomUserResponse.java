@@ -42,7 +42,7 @@ public class RoomUserResponse {
     // 3km 이내
     // 5km 이내
     // 5km 이상 -> 서비스 규약상 이런식으로 해야함
-    @Schema(description = "거리 구간. 나 또는 상대가 위치 미동의·위치 노출 OFF이거나 위치가 없으면 null", example = "WITHIN_3KM", nullable = true)
+    @Schema(description = "거리 구간. 나 또는 상대가 위치 미동의·위치 노출 OFF이거나 위치가 없거나 차단 관계면 null", example = "WITHIN_3KM", nullable = true)
     private DistanceRange distanceRange;
 
     public static RoomUserResponse from(RoomUser roomUser, TasteMatch match) {

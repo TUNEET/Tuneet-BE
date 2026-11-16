@@ -5,9 +5,11 @@ import com.tuneet.tuneetbe.domain.music.entity.Artist;
 import com.tuneet.tuneetbe.domain.music.entity.Genre;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.user.entity.User;
+import com.tuneet.tuneetbe.domain.user.entity.UserBlock;
 import com.tuneet.tuneetbe.domain.user.entity.UserGenre;
 import com.tuneet.tuneetbe.domain.user.enums.DistanceRange;
 import com.tuneet.tuneetbe.domain.user.repository.UserArtistRepository;
+import com.tuneet.tuneetbe.domain.user.repository.UserBlockRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserGenreRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserMusicLikeRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserMusicRepository;
@@ -34,6 +36,7 @@ public class TasteMatchService {
     private final UserMusicLikeRepository userMusicLikeRepository;
     private final UserArtistRepository userArtistRepository;
     private final UserGenreRepository userGenreRepository;
+    private final UserBlockRepository userBlockRepository;
 
     public Map<Long, TasteMatch> match(User me, Collection<User> targets) {
         Map<Long, TasteMatch> result = new HashMap<>();
@@ -79,6 +82,9 @@ public class TasteMatchService {
         boolean showPercent = me.canUseMatching() && iHaveTaste;
         Set<Long> othersWithTaste = showPercent ? findUsersWithTaste(otherIds, genres) : Set.of();
 
+        // 차단 관계(양방향)인 사용자에게는 거리를 보여 주지 않음
+        Set<Long> blockedIds = me.hasVisibleLocation() ? findBlockedUserIds(me.getId()) : Set.of();
+
         for (User other : others) {
             Long id = other.getId();
             List<Music> musics = List.copyOf(commonMusics.getOrDefault(id, Map.of()).values());
@@ -90,7 +96,8 @@ public class TasteMatchService {
             Integer percent = othersWithTaste.contains(id)
                     ? matchPercent(musics.size(), artists.size(), sharedGenres.size(), genreUnion)
                     : null;
-            result.put(id, new TasteMatch(percent, distanceRange(me, other), musics, artists, sharedGenres));
+            DistanceRange distance = blockedIds.contains(id) ? null : distanceRange(me, other);
+            result.put(id, new TasteMatch(percent, distance, musics, artists, sharedGenres));
         }
         return result;
     }
@@ -117,6 +124,15 @@ public class TasteMatchService {
 
     private static void addMusic(Map<Long, Map<String, Music>> commonMusics, Long userId, Music music) {
         commonMusics.computeIfAbsent(userId, id -> new LinkedHashMap<>()).putIfAbsent(music.getCanonicalId(), music);
+    }
+
+    private Set<Long> findBlockedUserIds(Long userId) {
+        Set<Long> blockedIds = new HashSet<>();
+        for (UserBlock block : userBlockRepository.findAllByBlockerIdOrBlockedId(userId, userId)) {
+            blockedIds.add(block.getBlocker().getId());
+            blockedIds.add(block.getBlocked().getId());
+        }
+        return blockedIds;
     }
 
     // 장르, 아티스트, 노래, 좋아요 중 하나라도 있는 사용자

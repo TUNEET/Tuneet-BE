@@ -41,7 +41,7 @@ public class UserProfileResponse {
             example = "92", nullable = true)
     private Integer matchPercent;
 
-    @Schema(description = "거리 구간. 나 또는 상대가 위치 미동의·위치 노출 OFF이거나 위치가 없으면 null", example = "WITHIN_3KM", nullable = true)
+    @Schema(description = "거리 구간. 나 또는 상대가 위치 미동의·위치 노출 OFF이거나 위치가 없거나 차단 관계면 null", example = "WITHIN_3KM", nullable = true)
     private DistanceRange distanceRange;
 
     @Schema(description = "편지 받기 여부", example = "true")

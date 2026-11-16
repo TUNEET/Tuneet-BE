@@ -9,7 +9,10 @@ import com.tuneet.tuneetbe.domain.user.entity.UserGenre;
 import com.tuneet.tuneetbe.domain.user.entity.UserMusic;
 import com.tuneet.tuneetbe.domain.user.entity.UserMusicLike;
 import com.tuneet.tuneetbe.domain.user.enums.DistanceRange;
+import com.tuneet.tuneetbe.domain.user.entity.UserBlock;
+import com.tuneet.tuneetbe.domain.user.enums.BlockType;
 import com.tuneet.tuneetbe.domain.user.repository.UserArtistRepository;
+import com.tuneet.tuneetbe.domain.user.repository.UserBlockRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserGenreRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserMusicLikeRepository;
 import com.tuneet.tuneetbe.domain.user.repository.UserMusicRepository;
@@ -51,11 +54,15 @@ class TasteMatchServiceTest {
     @Mock
     private UserGenreRepository userGenreRepository;
 
+    @Mock
+    private UserBlockRepository userBlockRepository;
+
     private TasteMatchService service;
 
     @BeforeEach
     void setUp() {
-        service = new TasteMatchService(userMusicRepository, userMusicLikeRepository, userArtistRepository, userGenreRepository);
+        service = new TasteMatchService(userMusicRepository, userMusicLikeRepository, userArtistRepository, userGenreRepository,
+                userBlockRepository);
     }
 
     // 위치 동의, 위치 노출을 켜고 위치를 저장한 사용자
@@ -187,6 +194,24 @@ class TasteMatchServiceTest {
         assertThat(matches.get(2L).matchPercent()).isEqualTo(20);
         assertThat(matches.get(3L).distanceRange()).isNull();
         assertThat(matches.get(4L).distanceRange()).isEqualTo(DistanceRange.WITHIN_3KM);
+    }
+
+    @Test
+    @DisplayName("상대가 나를 차단했거나 내가 상대를 차단했으면 거리는 null이다")
+    void blocked() {
+        User me = user(1L);
+        User blockedMe = user(2L);
+        User blockedByMe = user(3L);
+        User other = user(4L);
+        given(userBlockRepository.findAllByBlockerIdOrBlockedId(1L, 1L)).willReturn(List.of(
+                UserBlock.builder().blocker(blockedMe).blocked(me).type(BlockType.BLOCK).build(),
+                UserBlock.builder().blocker(me).blocked(blockedByMe).type(BlockType.BLOCK).build()));
+
+        Map<Long, TasteMatch> matches = service.match(me, List.of(blockedMe, blockedByMe, other));
+
+        assertThat(matches.get(2L).distanceRange()).isNull();
+        assertThat(matches.get(3L).distanceRange()).isNull();
+        assertThat(matches.get(4L).distanceRange()).isEqualTo(DistanceRange.WITHIN_1KM);
     }
 
     @Test

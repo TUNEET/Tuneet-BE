@@ -151,6 +151,18 @@ class RecommendationServiceTest {
     }
 
     @Test
+    @DisplayName("경도 -180은 같은 경선인 180으로 저장한다 (MySQL 거리 함수가 -180을 받지 않음)")
+    void longitudeMinus180() {
+        User me = user(USER_ID);
+        given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(me));
+
+        service.refresh(USER_ID, new RecommendationRequest(37.5, -179.997));
+
+        assertThat(me.getLongitude()).isEqualTo(180.0);
+        verify(userRepository).findRecommendationCandidates(USER_ID, 37.5, 180.0, NOW.minusDays(7), 200);
+    }
+
+    @Test
     @DisplayName("직전 추천은 다른 후보가 충분하면 빼고 뽑는다")
     void excludesPrevious() {
         List<User> candidates = new ArrayList<>();
