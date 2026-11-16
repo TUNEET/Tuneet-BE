@@ -121,13 +121,29 @@ public class GoogleOAuthClient {
             }
             return response;
         } catch (HttpClientErrorException e) {
-            // invalid_grant 등: 코드가 만료·재사용됐거나 사용자가 권한을 해제함
+            // invalid_grant: 코드가 만료·재사용됐거나 사용자가 권한을 해제함
             log.warn("Google 토큰 요청 거부: {} {}", e.getStatusCode(), e.getResponseBodyAsString());
+            if (rejected == PlatformErrorCode.PLATFORM_AUTH_EXPIRED && !isInvalidGrant(e)) {
+                // invalid_client 등 서버 설정 오류로 연동을 지우지 않음
+                throw new CustomException(PlatformErrorCode.PLATFORM_API_UNAVAILABLE);
+            }
             throw new CustomException(rejected);
         } catch (RestClientException e) {
             log.error("Google 토큰 요청 실패: {}", e.getMessage());
             throw new CustomException(PlatformErrorCode.PLATFORM_API_UNAVAILABLE);
         }
+    }
+
+    private boolean isInvalidGrant(HttpClientErrorException e) {
+        try {
+            TokenError error = e.getResponseBodyAs(TokenError.class);
+            return error != null && "invalid_grant".equals(error.error());
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    record TokenError(String error) {
     }
 
     public record TokenResponse(

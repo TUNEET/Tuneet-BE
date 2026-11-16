@@ -20,8 +20,9 @@ CREATE TABLE user_music_likes (
 );
 
 -- 유튜브 영상과 곡의 매칭 결과 (모든 사용자 공유, 30일 지나면 다시 매칭)
+-- 영상 ID는 대소문자를 구분하므로 ascii_bin
 CREATE TABLE youtube_video_matches (
-    video_id   VARCHAR(32) NOT NULL,
+    video_id   VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     music_id   BIGINT      NOT NULL,
     is_cover   BOOLEAN     NOT NULL,
     matched_at DATETIME(6) NOT NULL,

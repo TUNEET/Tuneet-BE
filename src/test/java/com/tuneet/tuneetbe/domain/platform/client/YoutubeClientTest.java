@@ -45,7 +45,7 @@ class YoutubeClientTest {
             String body = query.contains("pageToken=") ? pages[1] : pages[0];
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
-            exchange.sendResponseHeaders(status, bytes.length);
+            exchange.sendResponseHeaders(status, bytes.length == 0 ? -1 : bytes.length);
             exchange.getResponseBody().write(bytes);
             exchange.close();
         });
@@ -71,6 +71,19 @@ class YoutubeClientTest {
         assertThat(queries.get(0)).contains("playlistId=LM").contains("maxResults=50").doesNotContain("pageToken");
         assertThat(queries.get(1)).contains("pageToken=P2");
         assertThat(authorizations).containsOnly("Bearer ya29.token");
+    }
+
+    @Test
+    @DisplayName("다음 페이지 응답이 비면 일부 목록을 돌려주지 않는다")
+    void emptyNextPage() {
+        respond(200, """
+                {"nextPageToken":"P2","items":[
+                {"snippet":{"title":"Dynamite","videoOwnerChannelTitle":"BTS - Topic","resourceId":{"videoId":"v1"}}}]}
+                """, "");
+
+        assertThatThrownBy(() -> client.getLikedMusicVideos("token"))
+                .isInstanceOfSatisfying(CustomException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(PlatformErrorCode.PLATFORM_API_UNAVAILABLE));
     }
 
     @Test

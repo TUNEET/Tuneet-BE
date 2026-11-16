@@ -45,10 +45,14 @@ public class YoutubeClient {
         int fetched = 0;
         do {
             PlaylistItemsResponse page = fetchPage(accessToken, pageToken);
-            if (page == null || page.items() == null) {
+            if (page == null) {
+                if (pageToken != null) {
+                    // 중간 페이지가 비면 일부 목록으로 기존 좋아요를 지우지 않도록 중단
+                    throw new CustomException(PlatformErrorCode.PLATFORM_API_UNAVAILABLE);
+                }
                 break;
             }
-            for (PlaylistItem item : page.items()) {
+            for (PlaylistItem item : page.items() == null ? List.<PlaylistItem>of() : page.items()) {
                 fetched++;
                 Snippet snippet = item.snippet();
                 if (snippet == null || snippet.resourceId() == null || snippet.videoOwnerChannelTitle() == null) {

@@ -96,6 +96,16 @@ class GoogleOAuthClientTest {
     }
 
     @Test
+    @DisplayName("refresh token 문제가 아닌 거부(invalid_client 등)는 연동 해제로 보지 않는다")
+    void clientRejected() {
+        respond("/token", 401, "{\"error\":\"invalid_client\"}");
+
+        assertThatThrownBy(() -> client.refreshAccessToken("token"))
+                .isInstanceOfSatisfying(CustomException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(PlatformErrorCode.PLATFORM_API_UNAVAILABLE));
+    }
+
+    @Test
     @DisplayName("Google 서버 오류는 통신 실패로 본다")
     void serverError() {
         respond("/token", 503, "{}");
