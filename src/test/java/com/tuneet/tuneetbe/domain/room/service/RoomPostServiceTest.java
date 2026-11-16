@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.room.service;
 
+import com.tuneet.tuneetbe.domain.like.service.MusicLikeMarker;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.room.dto.response.RoomPostListResponse;
 import com.tuneet.tuneetbe.domain.room.dto.response.RoomPostResponse;
@@ -59,6 +60,9 @@ class RoomPostServiceTest {
 
     @Mock
     private RoomUserRepository roomUserRepository;
+
+    @Mock
+    private MusicLikeMarker musicLikeMarker;
 
     @InjectMocks
     private RoomPostService roomPostService;

@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.letter.service;
 
+import com.tuneet.tuneetbe.domain.like.service.MusicLikeMarker;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterDetailResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterListResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterRemainingResponse;
@@ -48,6 +49,7 @@ public class LetterService {
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final UserBlockRepository userBlockRepository;
+    private final MusicLikeMarker musicLikeMarker;
 
     // 지정 편지 발송
     @Transactional
@@ -219,7 +221,16 @@ public class LetterService {
         boolean isReplied = letterRepository.existsByParentLetterId(letterId);
 
         // 답장이면 답장 대상 편지(내가 보낸 편지)도 함께 반환 (상대가 편지함에서 삭제했어도 표시)
-        return toLetterDetailResponse(letter, toParentLetter(letter.getParentLetter()), isReplied);
+        LetterDetailResponse response = toLetterDetailResponse(letter, toParentLetter(letter.getParentLetter()), isReplied);
+
+        // 내가 좋아요한 곡 표시 (답장 대상 편지의 곡 포함)
+        List<MusicResponse> musics = new ArrayList<>();
+        musics.add(response.getMusic());
+        if (response.getParentLetter() != null) {
+            musics.add(response.getParentLetter().getMusic());
+        }
+        musicLikeMarker.mark(userId, musics);
+        return response;
     }
 
     // 편지 리스트 보기
@@ -244,6 +255,9 @@ public class LetterService {
             // 목록에서는 답장 대상 편지를 조회하지 않음 (편지마다 추가 조회가 생기는 N+1 방지)
             letterResponses.add(toLetterDetailResponse(letter, null, null));
         }
+
+        // 내가 좋아요한 곡 표시
+        musicLikeMarker.mark(userId, letterResponses.stream().map(LetterDetailResponse::getMusic).toList());
 
         // 응답 반환
         return LetterListResponse.builder()
@@ -465,6 +479,9 @@ public class LetterService {
         for (Letter letter : letters.getContent()) {
             letterResponses.add(toSentLetterResponse(letter));
         }
+
+        // 내가 좋아요한 곡 표시
+        musicLikeMarker.mark(userId, letterResponses.stream().map(SentLetterResponse::getMusic).toList());
 
         // 응답 반환
         return SentLetterListResponse.builder()

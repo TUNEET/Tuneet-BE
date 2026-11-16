@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.room.service;
 
+import com.tuneet.tuneetbe.domain.like.service.MusicLikeMarker;
 import com.tuneet.tuneetbe.domain.matching.service.TasteMatch;
 import com.tuneet.tuneetbe.domain.matching.service.TasteMatchService;
 import com.tuneet.tuneetbe.domain.user.enums.DistanceRange;
@@ -92,6 +93,9 @@ class RoomServiceTest {
 
     @Mock
     private TasteMatchService tasteMatchService;
+
+    @Mock
+    private MusicLikeMarker musicLikeMarker;
 
     @InjectMocks
     private RoomService roomService;

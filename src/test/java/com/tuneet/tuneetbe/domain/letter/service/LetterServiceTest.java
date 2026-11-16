@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.letter.service;
 
+import com.tuneet.tuneetbe.domain.like.service.MusicLikeMarker;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterDetailResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterListResponse;
 import com.tuneet.tuneetbe.domain.letter.dto.response.LetterRemainingResponse;
@@ -67,6 +68,9 @@ class LetterServiceTest {
 
     @Mock
     private UserBlockRepository userBlockRepository;
+
+    @Mock
+    private MusicLikeMarker musicLikeMarker;
 
     @InjectMocks
     private LetterService letterService;

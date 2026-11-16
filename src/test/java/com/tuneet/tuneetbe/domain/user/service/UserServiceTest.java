@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.user.service;
 
+import com.tuneet.tuneetbe.domain.like.repository.UserArtistLikeRepository;
 import com.tuneet.tuneetbe.domain.matching.repository.UserRecommendationRepository;
 import com.tuneet.tuneetbe.domain.matching.service.TasteMatch;
 import com.tuneet.tuneetbe.domain.matching.service.TasteMatchService;
@@ -132,6 +133,9 @@ class UserServiceTest {
 
     @Mock
     private UserRecommendationRepository userRecommendationRepository;
+
+    @Mock
+    private UserArtistLikeRepository userArtistLikeRepository;
 
     @InjectMocks
     private UserService userService;
@@ -331,6 +335,30 @@ class UserServiceTest {
         }
 
         @Test
+        @DisplayName("함께 좋아하는 아티스트에 좋아요한 아티스트로 겹치는 아티스트를 중복 없이 더한다")
+        void commonArtistsWithLikes() {
+            // given
+            User loginUser = savedUser("나", null);
+            User targetUser = savedUser("산책하는 튜니", null);
+            ReflectionTestUtils.setField(targetUser, "id", TARGET_USER_ID);
+            UserArtist shared = userArtist(targetUser, 2L);
+            Artist likedOnly = userArtist(targetUser, 5L).getArtist();
+            given(userRepository.findById(TARGET_USER_ID)).willReturn(Optional.of(targetUser));
+            given(userRepository.findById(USER_ID)).willReturn(Optional.of(loginUser));
+            given(userArtistRepository.findAllByUserId(USER_ID)).willReturn(List.of(userArtist(loginUser, 2L)));
+            given(userArtistRepository.findAllWithArtistByUserIdOrderByIdAsc(TARGET_USER_ID)).willReturn(List.of(shared));
+            given(tasteMatchService.match(loginUser, List.of(targetUser))).willReturn(Map.of(TARGET_USER_ID,
+                    new TasteMatch(50, null, List.of(), List.of(shared.getArtist(), likedOnly), List.of())));
+
+            // when
+            UserProfileResponse response = userService.getUserProfile(USER_ID, TARGET_USER_ID);
+
+            // then
+            assertThat(response.getCommon().getArtists()).extracting("artistId").containsExactly("artist-2", "artist-5");
+            assertThat(response.getFavoriteArtists()).extracting("artistId").containsExactly("artist-2");
+        }
+
+        @Test
         @DisplayName("탈퇴한 사용자를 조회하면 USER_NOT_FOUND 예외가 발생한다")
         void deletedUser() {
             // given
@@ -426,6 +454,7 @@ class UserServiceTest {
             verify(userArtistRepository).deleteAllByUserId(USER_ID);
             verify(userMusicRepository).deleteAllByUserId(USER_ID);
             verify(userMusicLikeRepository).deleteAllByUserId(USER_ID);
+            verify(userArtistLikeRepository).deleteAllByUserId(USER_ID);
             verify(userPlatformRepository).deleteAllByUserId(USER_ID);
             verify(userBlockRepository).deleteAllByBlockerIdOrBlockedId(USER_ID, USER_ID);
             verify(userRecommendationRepository).deleteAllByUserIdOrRecommendedUserId(USER_ID, USER_ID);

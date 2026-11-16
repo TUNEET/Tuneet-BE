@@ -2,6 +2,8 @@ package com.tuneet.tuneetbe.domain.user.repository;
 
 import com.tuneet.tuneetbe.domain.user.entity.UserMusicLike;
 import com.tuneet.tuneetbe.domain.user.enums.LikeSource;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -24,6 +26,33 @@ public interface UserMusicLikeRepository extends JpaRepository<UserMusicLike, Lo
     // 좋아요한 노래가 있는 사용자 ID
     @Query("SELECT DISTINCT l.user.id FROM UserMusicLike l WHERE l.user.id IN :userIds")
     List<Long> findUserIdsHavingLike(@Param("userIds") Collection<Long> userIds);
+
+    // 곡 MBID 중 내가 좋아요한 곡 (같은 곡의 다른 음원, 불러온 좋아요 포함)
+    @Query("""
+            SELECT m.externalId FROM Music m
+            WHERE m.externalId IN :externalIds
+              AND m.canonicalId IN (SELECT l.music.canonicalId FROM UserMusicLike l WHERE l.user.id = :userId)
+            """)
+    List<String> findLikedExternalIds(@Param("userId") Long userId, @Param("externalIds") Collection<String> externalIds);
+
+    // 곡 MBID와 같은 곡인 내 좋아요 ID (출처 상관없이)
+    @Query("""
+            SELECT l.id FROM UserMusicLike l
+            WHERE l.user.id = :userId
+              AND l.music.canonicalId IN (SELECT m.canonicalId FROM Music m WHERE m.externalId = :externalId)
+            """)
+    List<Long> findIdsByUserIdAndSameSongAs(@Param("userId") Long userId, @Param("externalId") String externalId);
+
+    // 좋아요한 곡 목록: 같은 곡은 가장 최근 좋아요 하나만, 최근 좋아요한 순
+    @Query("""
+            SELECT l FROM UserMusicLike l JOIN FETCH l.music m
+            WHERE l.user.id = :userId
+              AND (:cursor IS NULL OR l.id < :cursor)
+              AND l.id = (SELECT MAX(l2.id) FROM UserMusicLike l2
+                          WHERE l2.user.id = :userId AND l2.music.canonicalId = m.canonicalId)
+            ORDER BY l.id DESC
+            """)
+    Slice<UserMusicLike> findLatestPerSong(@Param("userId") Long userId, @Param("cursor") Long cursor, Pageable pageable);
 
     @Query("SELECT l.music.id FROM UserMusicLike l WHERE l.user.id = :userId AND l.source = :source")
     List<Long> findMusicIdsByUserIdAndSource(@Param("userId") Long userId, @Param("source") LikeSource source);

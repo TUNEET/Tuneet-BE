@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.notification.service;
 
+import com.tuneet.tuneetbe.domain.like.service.MusicLikeMarker;
 import com.tuneet.tuneetbe.domain.feed.entity.Feed;
 import com.tuneet.tuneetbe.domain.feed.entity.FeedMessage;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
@@ -46,6 +47,9 @@ class NotificationServiceTest {
 
     @Mock
     private FeedMessageRepository feedMessageRepository;
+
+    @Mock
+    private MusicLikeMarker musicLikeMarker;
 
     @InjectMocks
     private NotificationService notificationService;
