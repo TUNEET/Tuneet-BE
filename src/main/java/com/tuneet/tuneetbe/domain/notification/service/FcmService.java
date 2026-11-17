@@ -7,6 +7,7 @@ import com.tuneet.tuneetbe.domain.notification.repository.DeviceTokenRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,9 @@ public class FcmService {
 
     private final ObjectProvider<FirebaseMessaging> firebaseMessaging;
     private final DeviceTokenRepository deviceTokenRepository;
+
+    @Value("${firebase.link-base-url}")
+    private String linkBaseUrl; // 푸시 알림을 누르면 이동할 프론트 주소
 
     // 사용자의 모든 기기로 푸시 전송
     @Transactional
@@ -55,6 +59,10 @@ public class FcmService {
                 .putData("targetId", String.valueOf(targetId)) // 이동할 대상 ID
                 .putData("senderNickname", senderNickname) // 보낸 사람 닉네임
                 .putData("createdAt", String.valueOf(createdAt)) // 보낸 시간 (data는 문자열만 가능해서 문자열로 변환)
+                .putData("link", toLink(type, targetId)) // 이동할 페이지 링크 (앱이 켜져 있을 때 팝업에서 사용)
+                .setWebpushConfig(WebpushConfig.builder()
+                        .setFcmOptions(WebpushFcmOptions.withLink(toLink(type, targetId))) // 백그라운드 알림을 누르면 이동할 페이지
+                        .build())
                 .build();
 
         try {
@@ -84,5 +92,13 @@ public class FcmService {
             // 푸시 실패는 편지, 메시지 저장에 영향을 주지 않도록 로그만 남김
             log.error("[FcmService] 푸시 전송 실패: userId = {}", userId, e);
         }
+    }
+
+    // 알림 종류별로 이동할 페이지 링크 생성
+    private String toLink(NotificationType type, Long targetId) {
+        return switch (type) {
+            case FEED_MESSAGE -> linkBaseUrl + "/explore/feeds/" + targetId; // 피드 상세
+            case LETTER -> linkBaseUrl + "/matching/letters/" + targetId; // 편지 상세
+        };
     }
 }

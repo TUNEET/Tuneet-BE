@@ -38,6 +38,7 @@ cloud:
 
 firebase:
   credentials: ${FIREBASE_CREDENTIALS:}
+  link-base-url: https://www.tuneet.site # 푸시 알림을 누르면 이동할 프론트 주소
 
 music-api:
   base-url: ${MUSIC_API_BASE_URL}
