@@ -122,9 +122,13 @@ class MusicApiClientTest {
     @Test
     @DisplayName("아티스트 조회 응답을 변환한다")
     void getArtist() {
-        respond("/v1/artists/a1", 200, "{\"id\":\"a1\",\"name\":\"IU\",\"disambiguation\":null,\"songCount\":3}");
+        respond("/v1/artists/a1", 200,
+                "{\"id\":\"a1\",\"name\":\"IU\",\"disambiguation\":null,\"songCount\":3,\"imageUrl\":\"https://img.test/iu.jpg\"}");
 
-        assertThat(client.getArtist("a1")).hasValueSatisfying(artist -> assertThat(artist.name()).isEqualTo("IU"));
+        assertThat(client.getArtist("a1")).hasValueSatisfying(artist -> {
+            assertThat(artist.name()).isEqualTo("IU");
+            assertThat(artist.artistImage()).isEqualTo("https://img.test/iu.jpg");
+        });
     }
 
     @Test

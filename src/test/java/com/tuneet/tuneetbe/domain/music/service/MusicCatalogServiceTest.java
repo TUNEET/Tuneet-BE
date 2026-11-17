@@ -133,7 +133,7 @@ class MusicCatalogServiceTest {
                 .willReturn(List.of(artist(1, "a1")))
                 .willReturn(List.of(artist(1, "a1"), artist(2, "a2")));
         given(musicApiClient.getArtist("a2"))
-                .willReturn(Optional.of(new ArtistSearchItemResponse("a2", "RESCENE", null, 3)));
+                .willReturn(Optional.of(new ArtistSearchItemResponse("a2", "RESCENE", null, 3, null)));
 
         List<Artist> result = service.getOrCreateArtists(ids);
 
