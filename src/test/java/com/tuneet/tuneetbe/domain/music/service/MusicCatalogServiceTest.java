@@ -14,6 +14,8 @@ import com.tuneet.tuneetbe.global.exception.CustomException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -93,6 +95,27 @@ class MusicCatalogServiceTest {
         verify(artistRepository).insertIfAbsent("IU", "https://img.test/iu.jpg", "a1");
         verify(artistRepository, never()).insertIfAbsent("다른 가수", null, "a2");
         verify(musicRepository).insertIfAbsent("제목", "표기", "cover", "r2", "c-r2", 7L);
+    }
+
+    @ParameterizedTest(name = "이미지 있는 응답이 먼저: {0}")
+    @ValueSource(booleans = {true, false})
+    @DisplayName("같은 대표 아티스트가 여러 곡에 있으면 이미지가 있는 응답으로 저장한다")
+    void keepsArtistImageWhenSameArtistRepeats(boolean imageFirst) {
+        List<String> ids = List.of("r1", "r2");
+        MusicArtist withImage = new MusicArtist("a1", "IU", "https://img.test/iu.jpg");
+        MusicArtist withoutImage = new MusicArtist("a1", "IU", null);
+        given(musicRepository.findAllByExternalIdIn(ids))
+                .willReturn(List.of())
+                .willReturn(List.of(music(1, "r1"), music(2, "r2")));
+        given(musicApiClient.getMusics(ids)).willReturn(new MusicBatchResponse(List.of(
+                item("r1", imageFirst ? withImage : withoutImage),
+                item("r2", imageFirst ? withoutImage : withImage)), List.of()));
+        given(artistRepository.findAllByExternalIdIn(any())).willReturn(List.of(artist(7, "a1")));
+
+        service.getOrCreateMusics(ids);
+
+        verify(artistRepository).insertIfAbsent("IU", "https://img.test/iu.jpg", "a1");
+        verify(artistRepository, never()).insertIfAbsent("IU", null, "a1");
     }
 
     @Test
