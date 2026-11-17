@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.music.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "아티스트 검색 결과")
@@ -14,5 +15,9 @@ public record ArtistSearchItemResponse(
         String disambiguation,
 
         @Schema(description = "수록곡 수", example = "320")
-        int songCount) {
+        int songCount,
+
+        @Schema(description = "아티스트 이미지 URL. 없으면 null", nullable = true)
+        @JsonAlias("imageUrl")
+        String artistImage) {
 }
