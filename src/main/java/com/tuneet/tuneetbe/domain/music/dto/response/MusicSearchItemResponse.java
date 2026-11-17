@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.music.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
@@ -39,6 +40,10 @@ public record MusicSearchItemResponse(
             String id,
 
             @Schema(description = "아티스트 이름", example = "BTS")
-            String name) {
+            String name,
+
+            @Schema(description = "아티스트 이미지 URL. 없으면 null", nullable = true)
+            @JsonAlias("imageUrl")
+            String artistImage) {
     }
 }

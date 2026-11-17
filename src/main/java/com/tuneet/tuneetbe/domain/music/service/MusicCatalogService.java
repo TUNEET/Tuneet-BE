@@ -4,6 +4,7 @@ import com.tuneet.tuneetbe.domain.music.client.MusicApiClient;
 import com.tuneet.tuneetbe.domain.music.dto.response.ArtistSearchItemResponse;
 import com.tuneet.tuneetbe.domain.music.dto.response.MusicBatchResponse;
 import com.tuneet.tuneetbe.domain.music.dto.response.MusicSearchItemResponse;
+import com.tuneet.tuneetbe.domain.music.dto.response.MusicSearchItemResponse.MusicArtist;
 import com.tuneet.tuneetbe.domain.music.entity.Artist;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.music.exception.MusicErrorCode;
@@ -53,7 +54,7 @@ public class MusicCatalogService {
         for (String externalId : missingFrom(findArtists(externalIds), externalIds)) {
             ArtistSearchItemResponse artist = musicApiClient.getArtist(externalId)
                     .orElseThrow(() -> new CustomException(MusicErrorCode.ARTIST_NOT_FOUND));
-            artistRepository.insertIfAbsent(artist.name(), artist.id());
+            artistRepository.insertIfAbsent(artist.name(), artist.artistImage(), artist.id());
         }
         Map<String, Artist> artists = findArtists(externalIds);
         return externalIds.stream().map(artists::get).toList();
@@ -85,17 +86,19 @@ public class MusicCatalogService {
 
     // 곡의 첫 번째 아티스트를 대표 아티스트로 저장
     private Map<String, Long> savePrimaryArtists(List<MusicSearchItemResponse> items) {
-        Map<String, String> names = new LinkedHashMap<>();
+        Map<String, MusicArtist> primaries = new LinkedHashMap<>();
         for (MusicSearchItemResponse item : items) {
             if (!item.artists().isEmpty()) {
-                names.put(item.artists().get(0).id(), item.artists().get(0).name());
+                MusicArtist primary = item.artists().get(0);
+                // 같은 아티스트가 여러 곡에 있으면 이미지가 있는 쪽을 남김
+                primaries.merge(primary.id(), primary, (kept, next) -> kept.artistImage() != null ? kept : next);
             }
         }
-        if (names.isEmpty()) {
+        if (primaries.isEmpty()) {
             return Map.of();
         }
-        names.forEach((externalId, name) -> artistRepository.insertIfAbsent(name, externalId));
-        return artistRepository.findAllByExternalIdIn(names.keySet()).stream()
+        primaries.values().forEach(a -> artistRepository.insertIfAbsent(a.name(), a.artistImage(), a.id()));
+        return artistRepository.findAllByExternalIdIn(primaries.keySet()).stream()
                 .collect(Collectors.toMap(Artist::getExternalId, Artist::getId));
     }
 
