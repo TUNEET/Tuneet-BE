@@ -124,7 +124,7 @@ class YoutubeMusicSyncServiceTest {
 
     private MusicSearchItemResponse item(String id, String canonicalId, String artistId, String artistName) {
         return new MusicSearchItemResponse(id, canonicalId, "제목", artistName,
-                List.of(new MusicSearchItemResponse.MusicArtist(artistId, artistName)), null, null, null, null);
+                List.of(new MusicSearchItemResponse.MusicArtist(artistId, artistName, null)), null, null, null, null);
     }
 
     @Test

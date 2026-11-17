@@ -26,7 +26,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -80,19 +79,19 @@ class MusicCatalogServiceTest {
     @DisplayName("없는 곡만 음악 API에서 가져와 대표 아티스트와 함께 저장한다")
     void createsMissingMusic() {
         List<String> ids = List.of("r1", "r2");
-        MusicArtist first = new MusicArtist("a1", "IU");
+        MusicArtist first = new MusicArtist("a1", "IU", "https://img.test/iu.jpg");
         given(musicRepository.findAllByExternalIdIn(ids))
                 .willReturn(List.of(music(1, "r1")))
                 .willReturn(List.of(music(1, "r1"), music(2, "r2")));
         given(musicApiClient.getMusics(List.of("r2")))
-                .willReturn(new MusicBatchResponse(List.of(item("r2", first, new MusicArtist("a2", "다른 가수"))), List.of()));
+                .willReturn(new MusicBatchResponse(List.of(item("r2", first, new MusicArtist("a2", "다른 가수", null))), List.of()));
         given(artistRepository.findAllByExternalIdIn(any())).willReturn(List.of(artist(7, "a1")));
 
         List<Music> result = service.getOrCreateMusics(ids);
 
         assertThat(result).extracting(Music::getExternalId).containsExactly("r1", "r2");
-        verify(artistRepository).insertIfAbsent("IU", "a1");
-        verify(artistRepository, never()).insertIfAbsent("다른 가수", "a2");
+        verify(artistRepository).insertIfAbsent("IU", "https://img.test/iu.jpg", "a1");
+        verify(artistRepository, never()).insertIfAbsent("다른 가수", null, "a2");
         verify(musicRepository).insertIfAbsent("제목", "표기", "cover", "r2", "c-r2", 7L);
     }
 
@@ -108,7 +107,7 @@ class MusicCatalogServiceTest {
         service.getOrCreateMusics(ids);
 
         verify(musicRepository).insertIfAbsent("제목", "표기", "cover", "r1", "c-r1", null);
-        verify(artistRepository, never()).insertIfAbsent(anyString(), anyString());
+        verify(artistRepository, never()).insertIfAbsent(any(), any(), any());
     }
 
     @Test
@@ -133,12 +132,12 @@ class MusicCatalogServiceTest {
                 .willReturn(List.of(artist(1, "a1")))
                 .willReturn(List.of(artist(1, "a1"), artist(2, "a2")));
         given(musicApiClient.getArtist("a2"))
-                .willReturn(Optional.of(new ArtistSearchItemResponse("a2", "RESCENE", null, 3, null)));
+                .willReturn(Optional.of(new ArtistSearchItemResponse("a2", "RESCENE", null, 3, "https://img.test/rescene.jpg")));
 
         List<Artist> result = service.getOrCreateArtists(ids);
 
         assertThat(result).extracting(Artist::getExternalId).containsExactly("a2", "a1");
-        verify(artistRepository).insertIfAbsent("RESCENE", "a2");
+        verify(artistRepository).insertIfAbsent("RESCENE", "https://img.test/rescene.jpg", "a2");
         verify(musicApiClient, never()).getArtist("a1");
     }
 
