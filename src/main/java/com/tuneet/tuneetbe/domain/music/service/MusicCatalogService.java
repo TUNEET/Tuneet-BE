@@ -89,7 +89,9 @@ public class MusicCatalogService {
         Map<String, MusicArtist> primaries = new LinkedHashMap<>();
         for (MusicSearchItemResponse item : items) {
             if (!item.artists().isEmpty()) {
-                primaries.put(item.artists().get(0).id(), item.artists().get(0));
+                MusicArtist primary = item.artists().get(0);
+                // 같은 아티스트가 여러 곡에 있으면 이미지가 있는 쪽을 남김
+                primaries.merge(primary.id(), primary, (kept, next) -> kept.artistImage() != null ? kept : next);
             }
         }
         if (primaries.isEmpty()) {
