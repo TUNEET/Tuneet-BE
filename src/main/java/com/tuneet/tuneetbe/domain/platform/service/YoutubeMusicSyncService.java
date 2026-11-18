@@ -7,6 +7,7 @@ import com.tuneet.tuneetbe.domain.music.dto.response.VideoMatchResponse;
 import com.tuneet.tuneetbe.domain.music.entity.Artist;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.music.entity.YoutubeVideoMatch;
+import com.tuneet.tuneetbe.domain.music.exception.MusicErrorCode;
 import com.tuneet.tuneetbe.domain.music.repository.YoutubeVideoMatchRepository;
 import com.tuneet.tuneetbe.domain.music.service.MusicCatalogService;
 import com.tuneet.tuneetbe.domain.platform.client.GoogleOAuthClient;
@@ -139,7 +140,15 @@ public class YoutubeMusicSyncService {
                     .map(video -> video.withDetails(
                             details.get(video.videoId()).durationSeconds(), details.get(video.videoId()).releaseYear()))
                     .toList();
-            matchAndSave(retry, songsByVideo, now);
+            try {
+                matchAndSave(retry, songsByVideo, now);
+            } catch (CustomException e) {
+                // 재매칭이 실패해도 1차 매칭 결과는 저장
+                if (e.getErrorCode() != MusicErrorCode.MUSIC_API_UNAVAILABLE) {
+                    throw e;
+                }
+                log.warn("[YoutubeMusicSyncService] 재매칭 실패, 1차 결과만 저장: videos = {}", retry.size());
+            }
         }
         return songsByVideo;
     }

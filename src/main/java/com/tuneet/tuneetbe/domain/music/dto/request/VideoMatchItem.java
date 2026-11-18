@@ -1,5 +1,6 @@
 package com.tuneet.tuneetbe.domain.music.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.util.Locale;
@@ -17,6 +18,7 @@ public record VideoMatchItem(
         this(videoId, title, channel, null, null);
     }
 
+    @JsonIgnore
     public boolean isTopicChannel() {
         return channel != null && channel.toLowerCase(Locale.ROOT).endsWith(" - topic");
     }

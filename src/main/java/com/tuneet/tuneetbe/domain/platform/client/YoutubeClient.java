@@ -113,7 +113,6 @@ public class YoutubeClient {
                         .uri(uri -> uri.path("/videos")
                                 .queryParam("part", "contentDetails,snippet")
                                 .queryParam("id", "{ids}")
-                                .queryParam("maxResults", PAGE_SIZE)
                                 .queryParam("fields", "{fields}")
                                 .build(ids, VIDEO_FIELDS))
                         .header("Authorization", "Bearer " + accessToken)
