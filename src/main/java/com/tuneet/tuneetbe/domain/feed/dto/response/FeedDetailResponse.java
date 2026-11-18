@@ -22,6 +22,9 @@ public class FeedDetailResponse {
     @Schema(description = "내가 작성한 피드인지 여부", example = "true")
     private Boolean isMine;
 
+    @Schema(description = "작성자 고유번호", example = "1")
+    private Long userId;
+
     @Schema(description = "사용자 닉네임", example = "test01")
     private String nickname;
 

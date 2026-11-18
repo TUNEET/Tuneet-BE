@@ -214,6 +214,7 @@ class FeedServiceTest {
             FeedDetailResponse response = feedService.getFeed(USER_ID, FEED_ID);
 
             // then
+            assertThat(response.getUserId()).isEqualTo(OTHER_USER_ID); // 작성자 id
             assertThat(response.getNickname()).isEqualTo("산책하는 튜니");
             assertThat(response.getProfilePicture()).isEqualTo("other.png");
             assertThat(response.getIsMine()).isFalse();
@@ -270,6 +271,7 @@ class FeedServiceTest {
             // then
             assertThat(response.getFeeds()).extracting("feedId").containsExactly(3L, 2L);
             assertThat(response.getFeeds()).extracting("isMine").containsExactly(true, false);
+            assertThat(response.getFeeds()).extracting("userId").containsExactly(USER_ID, OTHER_USER_ID); // 작성자 id
             assertThat(response.getFeeds()).extracting("nickname").containsExactly("튜니", "산책하는 튜니");
             assertThat(response.getHasNext()).isTrue();
             verify(feedRepository, never()).findByIdLessThanOrderByIdDesc(any(), any());
