@@ -277,4 +277,49 @@ class YoutubeMusicSyncServiceTest {
         verify(musicApiClient, org.mockito.Mockito.times(2)).matchVideos(batches.capture());
         assertThat(batches.getAllValues()).extracting(List::size).containsExactly(100, 50);
     }
+
+    @Test
+    @DisplayName("제목으로 못 찾은 Topic 영상만 길이·발매 연도를 받아 다시 매칭한다")
+    void retryTopicVideosWithDetails() {
+        connected();
+        VideoMatchItem heroine = new VideoMatchItem("v1", "Heroine", "back number - Topic");
+        VideoMatchItem other = new VideoMatchItem("v2", "어떤 영상", "어떤 채널");
+        given(youtubeClient.getLikedMusicVideos("access")).willReturn(List.of(heroine, other));
+        given(youtubeVideoMatchRepository.findAllByVideoIdIn(List.of("v1", "v2"))).willReturn(List.of());
+        given(musicApiClient.matchVideos(List.of(heroine, other))).willReturn(new VideoMatchResponse(List.of(
+                new VideoMatchResponse.Result("v1", "ambiguous", false, "artist_not_confirmed", null),
+                new VideoMatchResponse.Result("v2", "unmatched", false, "not_found", null))));
+        given(youtubeClient.getVideoDetails("access", List.of("v1")))
+                .willReturn(Map.of("v1", new YoutubeClient.VideoDetails(270, 2015)));
+        MusicSearchItemResponse hiroin = item("r20", "c20", "a-bn", "back number");
+        given(musicApiClient.matchVideos(List.of(heroine.withDetails(270, 2015)))).willReturn(new VideoMatchResponse(List.of(
+                new VideoMatchResponse.Result("v1", "matched", false, null, hiroin))));
+        given(musicCatalogService.getOrCreateMusicsFrom(List.of(hiroin))).willReturn(Map.of("r20", music(20, "c20", null)));
+        given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(BeanUtils.instantiateClass(User.class)));
+
+        PlatformSyncResponse response = service.sync(USER_ID);
+
+        verify(youtubeVideoMatchRepository).upsert("v1", 20L, false, NOW);
+        verify(userMusicLikeRepository).insertIfAbsent(USER_ID, 20L, "YOUTUBE_MUSIC");
+        assertThat(response.getLikedMusicCount()).isEqualTo(1);
+        assertThat(response.getSkippedVideoCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("영상 정보를 못 받으면 다시 매칭하지 않는다")
+    void noRetryWithoutDetails() {
+        connected();
+        VideoMatchItem heroine = new VideoMatchItem("v1", "Heroine", "back number - Topic");
+        given(youtubeClient.getLikedMusicVideos("access")).willReturn(List.of(heroine));
+        given(youtubeVideoMatchRepository.findAllByVideoIdIn(List.of("v1"))).willReturn(List.of());
+        given(musicApiClient.matchVideos(List.of(heroine))).willReturn(new VideoMatchResponse(List.of(
+                new VideoMatchResponse.Result("v1", "ambiguous", false, "artist_not_confirmed", null))));
+        given(youtubeClient.getVideoDetails("access", List.of("v1"))).willReturn(Map.of());
+        given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(BeanUtils.instantiateClass(User.class)));
+
+        PlatformSyncResponse response = service.sync(USER_ID);
+
+        verify(musicApiClient, org.mockito.Mockito.times(1)).matchVideos(any());
+        assertThat(response.getLikedMusicCount()).isZero();
+    }
 }

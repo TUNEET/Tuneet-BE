@@ -108,4 +108,42 @@ class YoutubeClientTest {
                 .isInstanceOfSatisfying(CustomException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(PlatformErrorCode.PLATFORM_API_UNAVAILABLE));
     }
+
+    private void respondVideos(int status, String body) {
+        server.createContext("/videos", exchange -> {
+            queries.add(exchange.getRequestURI().getRawQuery());
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(status, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+    }
+
+    @Test
+    @DisplayName("영상 길이와 설명의 발매 연도를 읽는다")
+    void videoDetails() {
+        respondVideos(200, """
+                {"items":[
+                {"id":"v1","contentDetails":{"duration":"PT4M30S"},
+                 "snippet":{"description":"Provided to YouTube by Universal Music Group\\n\\nHeroine · back number\\n\\nReleased on: 2015-12-09"}},
+                {"id":"v2","contentDetails":{"duration":"PT3M5S"},"snippet":{"description":"설명 없음"}},
+                {"id":"v3","contentDetails":{"duration":"P0D"},"snippet":{}}]}
+                """);
+
+        var details = client.getVideoDetails("ya29.token", List.of("v1", "v2", "v3"));
+
+        assertThat(details).containsOnlyKeys("v1", "v2");
+        assertThat(details.get("v1")).isEqualTo(new YoutubeClient.VideoDetails(270, 2015));
+        assertThat(details.get("v2")).isEqualTo(new YoutubeClient.VideoDetails(185, null));
+        assertThat(queries.get(0)).contains("part=contentDetails,snippet").contains("id=v1%2Cv2%2Cv3");
+    }
+
+    @Test
+    @DisplayName("영상 정보 조회가 실패하면 빈 결과를 돌려준다")
+    void videoDetailsFailure() {
+        respondVideos(403, "{\"error\":{\"code\":403}}");
+
+        assertThat(client.getVideoDetails("ya29.token", List.of("v1"))).isEmpty();
+    }
 }
