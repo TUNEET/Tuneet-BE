@@ -136,7 +136,7 @@ class YoutubeClientTest {
         assertThat(details).containsOnlyKeys("v1", "v2");
         assertThat(details.get("v1")).isEqualTo(new YoutubeClient.VideoDetails(270, 2015));
         assertThat(details.get("v2")).isEqualTo(new YoutubeClient.VideoDetails(185, null));
-        assertThat(queries.get(0)).contains("part=contentDetails,snippet").contains("id=v1%2Cv2%2Cv3");
+        assertThat(queries.get(0)).contains("part=contentDetails,snippet").contains("id=v1%2Cv2%2Cv3").doesNotContain("maxResults");
     }
 
     @Test

@@ -7,6 +7,7 @@ import com.tuneet.tuneetbe.domain.music.dto.response.VideoMatchResponse;
 import com.tuneet.tuneetbe.domain.music.entity.Artist;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.music.entity.YoutubeVideoMatch;
+import com.tuneet.tuneetbe.domain.music.exception.MusicErrorCode;
 import com.tuneet.tuneetbe.domain.music.repository.YoutubeVideoMatchRepository;
 import com.tuneet.tuneetbe.domain.music.service.MusicCatalogService;
 import com.tuneet.tuneetbe.domain.platform.client.GoogleOAuthClient;
@@ -321,5 +322,31 @@ class YoutubeMusicSyncServiceTest {
 
         verify(musicApiClient, org.mockito.Mockito.times(1)).matchVideos(any());
         assertThat(response.getLikedMusicCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("재매칭 요청이 실패해도 1차 매칭 결과는 저장한다")
+    void retryFailureKeepsFirstMatches() {
+        connected();
+        VideoMatchItem butter = new VideoMatchItem("v1", "Butter", "BTS - Topic");
+        VideoMatchItem heroine = new VideoMatchItem("v2", "Heroine", "back number - Topic");
+        given(youtubeClient.getLikedMusicVideos("access")).willReturn(List.of(butter, heroine));
+        given(youtubeVideoMatchRepository.findAllByVideoIdIn(List.of("v1", "v2"))).willReturn(List.of());
+        MusicSearchItemResponse butterItem = item("r11", "c11", "a-bts", "BTS");
+        given(musicApiClient.matchVideos(List.of(butter, heroine))).willReturn(new VideoMatchResponse(List.of(
+                new VideoMatchResponse.Result("v1", "matched", false, null, butterItem),
+                new VideoMatchResponse.Result("v2", "ambiguous", false, "artist_not_confirmed", null))));
+        given(musicCatalogService.getOrCreateMusicsFrom(List.of(butterItem))).willReturn(Map.of("r11", music(11, "c11", null)));
+        given(youtubeClient.getVideoDetails("access", List.of("v2")))
+                .willReturn(Map.of("v2", new YoutubeClient.VideoDetails(270, 2015)));
+        given(musicApiClient.matchVideos(List.of(heroine.withDetails(270, 2015))))
+                .willThrow(new CustomException(MusicErrorCode.MUSIC_API_UNAVAILABLE));
+        given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(BeanUtils.instantiateClass(User.class)));
+
+        PlatformSyncResponse response = service.sync(USER_ID);
+
+        verify(userMusicLikeRepository).insertIfAbsent(USER_ID, 11L, "YOUTUBE_MUSIC");
+        assertThat(response.getLikedMusicCount()).isEqualTo(1);
+        assertThat(response.getSkippedVideoCount()).isEqualTo(1);
     }
 }
