@@ -108,6 +108,7 @@ public class FeedService {
 
         return FeedDetailResponse.builder()
                 .feedId(feed.getId())
+                .userId(writer.getId())
                 .nickname(writer.getNickname())
                 .profilePicture(writer.getProfilePicture())
                 .music(MusicResponse.builder()
