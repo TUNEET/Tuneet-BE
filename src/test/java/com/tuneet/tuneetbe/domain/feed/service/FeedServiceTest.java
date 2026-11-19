@@ -4,6 +4,8 @@ import com.tuneet.tuneetbe.domain.like.service.MusicLikeMarker;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedCreateResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedDetailResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedListResponse;
+import com.tuneet.tuneetbe.domain.feed.dto.response.FeedMessageListResponse;
+import com.tuneet.tuneetbe.domain.feed.dto.response.FeedMessageResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedSendMessageResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedUpdateResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.SentFeedMessageListResponse;
@@ -46,6 +48,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -82,6 +85,9 @@ class FeedServiceTest {
 
     @Mock
     private MusicLikeMarker musicLikeMarker;
+
+    @Mock
+    private FeedMessageReplyService feedMessageReplyService;
 
     @InjectMocks
     private FeedService feedService;
@@ -478,8 +484,9 @@ class FeedServiceTest {
             feedService.deleteFeed(USER_ID, FEED_ID);
 
             // then
-            InOrder inOrder = inOrder(notificationRepository, feedMessageRepository, feedRepository);
+            InOrder inOrder = inOrder(notificationRepository, feedMessageReplyService, feedMessageRepository, feedRepository);
             inOrder.verify(notificationRepository).deleteAllByTypeAndTargetIdIn(NotificationType.FEED_MESSAGE, List.of(501L, 502L));
+            inOrder.verify(feedMessageReplyService).deleteRepliesOf(List.of(501L, 502L));
             inOrder.verify(feedMessageRepository).deleteAllByFeedId(FEED_ID);
             inOrder.verify(feedRepository).deleteById(FEED_ID);
         }
@@ -761,6 +768,88 @@ class FeedServiceTest {
 
             // then
             verify(feedMessageRepository).findAllByUserIdAndDeletedBySenderFalse(USER_ID);
+        }
+    }
+
+    @Nested
+    @DisplayName("피드 코멘트 목록 보기")
+    class GetFeedMessages {
+
+        @Test
+        @DisplayName("피드에 달린 코멘트를 최신순으로 보낸 사람, 노래, 내용과 함께 반환한다")
+        void success() {
+            // given
+            Feed feed = savedFeed(FEED_ID, writer(2L, "피드 주인", null));
+            User singer = writer(3L, "노래하는 튜니", "profile.png");
+            User guitar = writer(4L, "기타치는 튜니", null);
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.of(feed));
+            given(feedMessageRepository.findAllByFeedIdOrderByIdDesc(FEED_ID))
+                    .willReturn(List.of(sentMessage(502L, singer, feed), sentMessage(501L, guitar, feed)));
+
+            // when
+            FeedMessageListResponse response = feedService.getFeedMessages(USER_ID, FEED_ID);
+
+            // then
+            assertThat(response.getMessages()).extracting(FeedMessageResponse::getSenderNickname).containsExactly("노래하는 튜니", "기타치는 튜니");
+            FeedMessageResponse first = response.getMessages().get(0);
+            assertThat(first.getSenderProfilePicture()).isEqualTo("profile.png");
+            assertThat(first.getMessageContent()).isEqualTo("이 노래도 좋아하실 것 같아요!");
+            assertThat(first.getMusic()).isNotNull();
+            verify(musicLikeMarker).mark(eq(USER_ID), any());
+        }
+
+        @Test
+        @DisplayName("차단 관계인 사용자의 코멘트는 제외하고, 탈퇴한 사용자는 탈퇴한 사용자로 표시한다")
+        void blockedAndDeleted() {
+            // given
+            User me = writer(USER_ID, "나", null);
+            Feed feed = savedFeed(FEED_ID, writer(2L, "피드 주인", null));
+            User blocked = writer(3L, "차단한 튜니", null);
+            User deleted = writer(4L, "탈퇴 예정", null);
+            deleted.deleteUser(LocalDateTime.now());
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.of(feed));
+            given(userBlockRepository.findAllByBlockerIdOrBlockedId(USER_ID, USER_ID))
+                    .willReturn(List.of(UserBlock.builder().blocker(me).blocked(blocked).type(BlockType.BLOCK).build()));
+            given(feedMessageRepository.findAllByFeedIdOrderByIdDesc(FEED_ID))
+                    .willReturn(List.of(sentMessage(502L, blocked, feed), sentMessage(501L, deleted, feed)));
+
+            // when
+            FeedMessageListResponse response = feedService.getFeedMessages(USER_ID, FEED_ID);
+
+            // then
+            assertThat(response.getMessages()).extracting(FeedMessageResponse::getSenderNickname).containsExactly("탈퇴한 사용자");
+        }
+
+        @Test
+        @DisplayName("피드 작성자와 차단 관계면 BLOCKED_USER 예외가 발생한다")
+        void blockedWriter() {
+            // given
+            User me = writer(USER_ID, "나", null);
+            User owner = writer(2L, "피드 주인", null);
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.of(savedFeed(FEED_ID, owner)));
+            given(userBlockRepository.findAllByBlockerIdOrBlockedId(USER_ID, USER_ID))
+                    .willReturn(List.of(UserBlock.builder().blocker(owner).blocked(me).type(BlockType.BLOCK).build()));
+
+            // when & then
+            assertThatThrownBy(() -> feedService.getFeedMessages(USER_ID, FEED_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(UserErrorCode.BLOCKED_USER);
+
+            verify(feedMessageRepository, never()).findAllByFeedIdOrderByIdDesc(any());
+        }
+
+        @Test
+        @DisplayName("피드가 없으면 FEED_NOT_FOUND 예외가 발생한다")
+        void feedNotFound() {
+            // given
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.empty());
+
+            // when & then
+            assertThatThrownBy(() -> feedService.getFeedMessages(USER_ID, FEED_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(FeedErrorCode.FEED_NOT_FOUND);
         }
     }
 }
