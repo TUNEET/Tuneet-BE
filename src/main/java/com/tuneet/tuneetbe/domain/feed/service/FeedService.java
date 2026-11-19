@@ -37,6 +37,8 @@ import java.util.List;
 @Slf4j
 public class FeedService {
 
+    private static final String DELETED_USER_NICKNAME = "탈퇴한 사용자"; // 탈퇴한 사용자 표시 닉네임
+
     private final FeedRepository feedRepository;
     private final UserRepository userRepository;
     private final FeedMessageRepository feedMessageRepository;
@@ -44,6 +46,7 @@ public class FeedService {
     private final ApplicationEventPublisher eventPublisher;
     private final UserBlockRepository userBlockRepository;
     private final MusicLikeMarker musicLikeMarker;
+    private final FeedMessageReplyService feedMessageReplyService;
 
     // 피드 작성
     @Transactional
@@ -238,6 +241,9 @@ public class FeedService {
             notificationRepository.deleteAllByTypeAndTargetIdIn(NotificationType.FEED_MESSAGE, messageIds);
         }
 
+        // 메시지에 달린 답장과 답장 알림 삭제
+        feedMessageReplyService.deleteRepliesOf(messageIds);
+
         // 피드 메시지 먼저 삭제
         feedMessageRepository.deleteAllByFeedId(feedId);
 
@@ -309,6 +315,58 @@ public class FeedService {
                         .build())
                 .messageContent(messageContent)
                 .createdAt(feedMessage.getCreatedAt())
+                .build();
+    }
+
+    // 피드 코멘트 목록 보기
+    public FeedMessageListResponse getFeedMessages(Long userId, Long feedId) {
+
+        // 피드가 존재하는지 조회
+        Feed feed = feedRepository.findById(feedId)
+                .orElseThrow(() -> new CustomException(FeedErrorCode.FEED_NOT_FOUND));
+
+        // 차단 관계인 사용자 조회 (피드 작성자와 차단 관계면 조회 불가, 코멘트 작성자와 차단 관계면 그 코멘트는 제외)
+        List<Long> blockedUserIds = getBlockedRelationUserIds(userId);
+        if (blockedUserIds.contains(feed.getUser().getId())) {
+            log.warn("[FeedService] 차단 관계인 사용자의 피드입니다.");
+            throw new CustomException(UserErrorCode.BLOCKED_USER);
+        }
+
+        // 응답 목록 세팅 (최신순)
+        List<FeedMessageResponse> messageResponses = new ArrayList<>();
+        for (FeedMessage feedMessage : feedMessageRepository.findAllByFeedIdOrderByIdDesc(feedId)) {
+
+            User sender = feedMessage.getUser(); // 코멘트 보낸 사람
+            if (blockedUserIds.contains(sender.getId())) {
+                continue;
+            }
+
+            Music music = feedMessage.getMusic(); // 코멘트와 함께 보낸 노래 (없을 수 있음)
+            MusicResponse musicResponse = null;
+            if (music != null) {
+                musicResponse = MusicResponse.builder()
+                        .musicId(music.getExternalId())
+                        .title(music.getTitle())
+                        .artist(music.getArtist())
+                        .musicPicture(music.getMusicPicture())
+                        .build();
+            }
+
+            messageResponses.add(FeedMessageResponse.builder()
+                    .senderNickname(sender.isDeleted() ? DELETED_USER_NICKNAME : sender.getNickname())
+                    .senderProfilePicture(sender.getProfilePicture())
+                    .music(musicResponse)
+                    .messageContent(feedMessage.getMessageContent())
+                    .createdAt(feedMessage.getCreatedAt())
+                    .build());
+        }
+
+        // 내가 좋아요한 곡 표시
+        musicLikeMarker.mark(userId, messageResponses.stream().map(FeedMessageResponse::getMusic).toList());
+
+        // 응답 반환
+        return FeedMessageListResponse.builder()
+                .messages(messageResponses)
                 .build();
     }
 

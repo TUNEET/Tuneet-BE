@@ -99,6 +99,7 @@ public class FcmService {
         return switch (type) {
             case FEED_MESSAGE -> linkBaseUrl + "/explore/feeds/" + targetId; // 피드 상세
             case LETTER -> linkBaseUrl + "/matching/letters/" + targetId; // 편지 상세
+            case FEED_MESSAGE_REPLY -> linkBaseUrl + "/notifications/replies/" + targetId; // 코멘트 답장 상세
         };
     }
 }
