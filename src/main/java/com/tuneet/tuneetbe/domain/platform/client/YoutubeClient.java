@@ -13,8 +13,13 @@ import org.springframework.web.client.RestClientException;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Component
@@ -28,6 +33,8 @@ public class YoutubeClient {
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
     private static final String FIELDS = "nextPageToken,items(snippet(title,videoOwnerChannelTitle,resourceId/videoId))";
+    private static final String VIDEO_FIELDS = "items(id,contentDetails/duration,snippet/description)";
+    private static final Pattern RELEASED_ON = Pattern.compile("Released on: (\\d{4})-\\d{2}-\\d{2}");
 
     private final RestClient client;
 
@@ -93,6 +100,72 @@ public class YoutubeClient {
             log.error("유튜브 좋아요 조회 실패: {}", e.getMessage());
             throw new CustomException(PlatformErrorCode.PLATFORM_API_UNAVAILABLE);
         }
+    }
+
+    // 영상 길이와 설명의 발매 연도 (매칭이 안 된 Topic 영상 재매칭용). 실패하면 빈 결과
+    public Map<String, VideoDetails> getVideoDetails(String accessToken, List<String> videoIds) {
+        Map<String, VideoDetails> details = new HashMap<>();
+        for (int from = 0; from < videoIds.size(); from += PAGE_SIZE) {
+            String ids = String.join(",", videoIds.subList(from, Math.min(from + PAGE_SIZE, videoIds.size())));
+            VideosResponse page;
+            try {
+                page = client.get()
+                        .uri(uri -> uri.path("/videos")
+                                .queryParam("part", "contentDetails,snippet")
+                                .queryParam("id", "{ids}")
+                                .queryParam("fields", "{fields}")
+                                .build(ids, VIDEO_FIELDS))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .retrieve()
+                        .body(VideosResponse.class);
+            } catch (RestClientException e) {
+                log.warn("유튜브 영상 정보 조회 실패: {}", e.getMessage());
+                return details;
+            }
+            for (Video video : page == null || page.items() == null ? List.<Video>of() : page.items()) {
+                Integer seconds = durationSeconds(video);
+                if (video.id() != null && seconds != null) {
+                    details.put(video.id(), new VideoDetails(seconds, releaseYear(video)));
+                }
+            }
+        }
+        return details;
+    }
+
+    private static Integer durationSeconds(Video video) {
+        if (video.contentDetails() == null || video.contentDetails().duration() == null) {
+            return null;
+        }
+        try {
+            long seconds = Duration.parse(video.contentDetails().duration()).getSeconds();
+            return seconds > 0 ? (int) seconds : null;
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    // Topic 영상 설명의 "Released on: 2015-12-09"
+    private static Integer releaseYear(Video video) {
+        if (video.snippet() == null || video.snippet().description() == null) {
+            return null;
+        }
+        Matcher matcher = RELEASED_ON.matcher(video.snippet().description());
+        return matcher.find() ? Integer.valueOf(matcher.group(1)) : null;
+    }
+
+    public record VideoDetails(int durationSeconds, Integer releaseYear) {
+    }
+
+    record VideosResponse(List<Video> items) {
+    }
+
+    record Video(String id, ContentDetails contentDetails, VideoSnippet snippet) {
+    }
+
+    record ContentDetails(String duration) {
+    }
+
+    record VideoSnippet(String description) {
     }
 
     record PlaylistItemsResponse(String nextPageToken, List<PlaylistItem> items) {

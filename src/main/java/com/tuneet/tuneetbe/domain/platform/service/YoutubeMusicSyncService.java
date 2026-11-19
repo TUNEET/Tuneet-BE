@@ -7,6 +7,7 @@ import com.tuneet.tuneetbe.domain.music.dto.response.VideoMatchResponse;
 import com.tuneet.tuneetbe.domain.music.entity.Artist;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
 import com.tuneet.tuneetbe.domain.music.entity.YoutubeVideoMatch;
+import com.tuneet.tuneetbe.domain.music.exception.MusicErrorCode;
 import com.tuneet.tuneetbe.domain.music.repository.YoutubeVideoMatchRepository;
 import com.tuneet.tuneetbe.domain.music.service.MusicCatalogService;
 import com.tuneet.tuneetbe.domain.platform.client.GoogleOAuthClient;
@@ -65,7 +66,7 @@ public class YoutubeMusicSyncService {
         List<VideoMatchItem> videos = youtubeClient.getLikedMusicVideos(accessToken);
 
         LocalDateTime now = LocalDateTime.now(clock);
-        Map<String, LikedSong> songsByVideo = matchVideos(videos, now);
+        Map<String, LikedSong> songsByVideo = matchVideos(accessToken, videos, now);
 
         // 좋아요 목록 순서(최신순)대로, 곡을 찾은 영상만
         List<LikedSong> likedSongs = videos.stream()
@@ -108,7 +109,7 @@ public class YoutubeMusicSyncService {
     }
 
     // 30일 안에 매칭한 영상은 저장된 결과를 쓰고, 나머지만 음악 API로 매칭
-    private Map<String, LikedSong> matchVideos(List<VideoMatchItem> videos, LocalDateTime now) {
+    private Map<String, LikedSong> matchVideos(String accessToken, List<VideoMatchItem> videos, LocalDateTime now) {
         Map<String, LikedSong> songsByVideo = new HashMap<>();
         List<String> videoIds = videos.stream().map(VideoMatchItem::videoId).distinct().toList();
         if (videoIds.isEmpty()) {
@@ -125,7 +126,34 @@ public class YoutubeMusicSyncService {
                 .filter(video -> !songsByVideo.containsKey(video.videoId()))
                 .forEach(video -> toMatch.putIfAbsent(video.videoId(), video));
         List<VideoMatchItem> pending = List.copyOf(toMatch.values());
+        matchAndSave(pending, songsByVideo, now);
 
+        // 제목이 영어로 올라간 일본 곡 등: Topic 영상만 길이·발매 연도를 받아 다시 매칭
+        List<VideoMatchItem> unmatchedTopic = pending.stream()
+                .filter(video -> !songsByVideo.containsKey(video.videoId()) && video.isTopicChannel())
+                .toList();
+        if (!unmatchedTopic.isEmpty()) {
+            Map<String, YoutubeClient.VideoDetails> details = youtubeClient.getVideoDetails(
+                    accessToken, unmatchedTopic.stream().map(VideoMatchItem::videoId).toList());
+            List<VideoMatchItem> retry = unmatchedTopic.stream()
+                    .filter(video -> details.containsKey(video.videoId()))
+                    .map(video -> video.withDetails(
+                            details.get(video.videoId()).durationSeconds(), details.get(video.videoId()).releaseYear()))
+                    .toList();
+            try {
+                matchAndSave(retry, songsByVideo, now);
+            } catch (CustomException e) {
+                // 재매칭이 실패해도 1차 매칭 결과는 저장
+                if (e.getErrorCode() != MusicErrorCode.MUSIC_API_UNAVAILABLE) {
+                    throw e;
+                }
+                log.warn("[YoutubeMusicSyncService] 재매칭 실패, 1차 결과만 저장: videos = {}", retry.size());
+            }
+        }
+        return songsByVideo;
+    }
+
+    private void matchAndSave(List<VideoMatchItem> pending, Map<String, LikedSong> songsByVideo, LocalDateTime now) {
         for (int from = 0; from < pending.size(); from += MATCH_BATCH_SIZE) {
             List<VideoMatchItem> batch = pending.subList(from, Math.min(from + MATCH_BATCH_SIZE, pending.size()));
             List<VideoMatchResponse.Result> matched = musicApiClient.matchVideos(batch).results().stream()
@@ -145,7 +173,6 @@ public class YoutubeMusicSyncService {
                 songsByVideo.put(result.videoId(), LikedSong.from(music, result));
             }
         }
-        return songsByVideo;
     }
 
     // 이번 목록과 달라진 좋아요만 삭제·추가 (전체 삭제 후 저장하지 않음)
