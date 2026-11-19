@@ -123,6 +123,7 @@ public class UserTasteService {
                 .title(music.getTitle())
                 .artist(music.getArtist())
                 .musicPicture(music.getMusicPicture())
+                .videoId(music.getYoutubeVideoId())
                 .build();
     }
 

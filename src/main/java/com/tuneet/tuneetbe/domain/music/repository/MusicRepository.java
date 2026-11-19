@@ -18,8 +18,8 @@ public interface MusicRepository extends JpaRepository<Music, Long> {
     @Transactional
     @Modifying
     @Query(value = """
-            INSERT INTO music (title, artist, music_picture, external_id, canonical_id, artist_id)
-            VALUES (:title, :artist, :musicPicture, :externalId, :canonicalId, :artistId)
+            INSERT INTO music (title, artist, music_picture, external_id, canonical_id, artist_id, youtube_video_id)
+            VALUES (:title, :artist, :musicPicture, :externalId, :canonicalId, :artistId, :youtubeVideoId)
             ON DUPLICATE KEY UPDATE music_id = music_id
             """, nativeQuery = true)
     void insertIfAbsent(
@@ -28,5 +28,12 @@ public interface MusicRepository extends JpaRepository<Music, Long> {
             @Param("musicPicture") String musicPicture,
             @Param("externalId") String externalId,
             @Param("canonicalId") String canonicalId,
-            @Param("artistId") Long artistId);
+            @Param("artistId") Long artistId,
+            @Param("youtubeVideoId") String youtubeVideoId);
+
+    // 유튜브 좋아요에서 매칭된 원곡 영상으로 교체
+    @Transactional
+    @Modifying
+    @Query(value = "UPDATE music SET youtube_video_id = :videoId WHERE music_id = :musicId", nativeQuery = true)
+    void updateYoutubeVideoId(@Param("musicId") Long musicId, @Param("videoId") String videoId);
 }

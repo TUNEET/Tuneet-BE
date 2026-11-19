@@ -26,6 +26,9 @@ public class MusicResponse {
     @Schema(description = "앨범 커버 이미지 url", example = "https://...")
     private String musicPicture;
 
+    @Schema(description = "재생용 유튜브 영상 ID. 없으면 null", example = "jeqdYqsrsA0", nullable = true)
+    private String videoId;
+
     @Schema(description = "내가 좋아요한 곡인지 (같은 곡의 다른 음원, 유튜브에서 불러온 좋아요 포함). 목록·상세 조회에서만 채우고 그 외 응답은 null",
             example = "true", nullable = true)
     private Boolean liked;
@@ -40,6 +43,7 @@ public class MusicResponse {
                 .title(music.getTitle())
                 .artist(music.getArtist())
                 .musicPicture(music.getMusicPicture())
+                .videoId(music.getYoutubeVideoId())
                 .build();
     }
 }

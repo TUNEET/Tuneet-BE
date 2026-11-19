@@ -170,6 +170,9 @@ public class YoutubeMusicSyncService {
                     continue;
                 }
                 youtubeVideoMatchRepository.upsert(result.videoId(), music.getId(), result.isCover(), now);
+                if (!result.isCover()) {
+                    musicCatalogService.updateYoutubeVideoId(music.getId(), result.videoId());
+                }
                 songsByVideo.put(result.videoId(), LikedSong.from(music, result));
             }
         }

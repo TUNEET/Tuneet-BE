@@ -32,7 +32,11 @@ public record MusicSearchItemResponse(
         Integer releaseYear,
 
         @Schema(description = "앨범 커버 URL", nullable = true)
-        String coverUrl) {
+        String coverUrl,
+
+        @Schema(description = "재생용 유튜브 영상 ID. 없으면 null", nullable = true)
+        @JsonAlias("youtubeVideoId")
+        String videoId) {
 
     @Schema(description = "곡의 아티스트")
     public record MusicArtist(

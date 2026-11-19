@@ -32,6 +32,9 @@ public class Music {
     @Column(nullable = false, length = 36)
     private String canonicalId; // 같은 곡의 음원이 공유하는 대표 ID
 
+    @Column(length = 32)
+    private String youtubeVideoId; // 재생용 유튜브 영상 ID
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "artist_id")
     private Artist primaryArtist; // 대표 아티스트
