@@ -62,7 +62,7 @@ class MusicCatalogServiceTest {
     }
 
     private MusicSearchItemResponse item(String id, MusicArtist... artists) {
-        return new MusicSearchItemResponse(id, "c-" + id, "제목", "표기", List.of(artists), null, null, null, "cover");
+        return new MusicSearchItemResponse(id, "c-" + id, "제목", "표기", List.of(artists), null, null, null, "cover", "yt-" + id);
     }
 
     @Test
@@ -94,7 +94,7 @@ class MusicCatalogServiceTest {
         assertThat(result).extracting(Music::getExternalId).containsExactly("r1", "r2");
         verify(artistRepository).insertIfAbsent("IU", "https://img.test/iu.jpg", "a1");
         verify(artistRepository, never()).insertIfAbsent("다른 가수", null, "a2");
-        verify(musicRepository).insertIfAbsent("제목", "표기", "cover", "r2", "c-r2", 7L);
+        verify(musicRepository).insertIfAbsent("제목", "표기", "cover", "r2", "c-r2", 7L, "yt-r2");
     }
 
     @ParameterizedTest(name = "이미지 있는 응답이 먼저: {0}")
@@ -129,7 +129,7 @@ class MusicCatalogServiceTest {
 
         service.getOrCreateMusics(ids);
 
-        verify(musicRepository).insertIfAbsent("제목", "표기", "cover", "r1", "c-r1", null);
+        verify(musicRepository).insertIfAbsent("제목", "표기", "cover", "r1", "c-r1", null, "yt-r1");
         verify(artistRepository, never()).insertIfAbsent(any(), any(), any());
     }
 
@@ -144,7 +144,7 @@ class MusicCatalogServiceTest {
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(MusicErrorCode.MUSIC_NOT_FOUND);
-        verify(musicRepository, never()).insertIfAbsent(any(), any(), any(), any(), any(), any());
+        verify(musicRepository, never()).insertIfAbsent(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

@@ -173,7 +173,8 @@ class MusicApiClientTest {
             byte[] bytes = """
                     {"results":[{"videoId":"v1","status":"matched","stage":"artist_title","score":100.0,
                     "isCover":true,"reason":null,"music":{"id":"r1","canonicalId":"c1","title":"봄날","artist":"BTS",
-                    "artists":[{"id":"a1","name":"BTS","koreanName":"방탄소년단","imageUrl":"https://img.test/bts.jpg"}],"coverUrl":null,"isVariant":false},
+                    "artists":[{"id":"a1","name":"BTS","koreanName":"방탄소년단","imageUrl":"https://img.test/bts.jpg"}],"coverUrl":null,"isVariant":false,
+                    "youtubeVideoId":"xEeFrLSkMm8"},
                     "candidates":[]},
                     {"videoId":"v2","status":"unmatched","stage":null,"score":null,"isCover":false,
                     "reason":"compilation","music":null,"candidates":[]}]}
@@ -193,6 +194,7 @@ class MusicApiClientTest {
             assertThat(result.isMatched()).isTrue();
             assertThat(result.isCover()).isTrue();
             assertThat(result.music().artists().get(0).id()).isEqualTo("a1");
+            assertThat(result.music().videoId()).isEqualTo("xEeFrLSkMm8");
             assertThat(result.music().artists().get(0).artistImage()).isEqualTo("https://img.test/bts.jpg");
         });
         assertThat(response.results().get(1).isMatched()).isFalse();

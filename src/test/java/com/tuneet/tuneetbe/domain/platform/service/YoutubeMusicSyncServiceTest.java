@@ -125,7 +125,7 @@ class YoutubeMusicSyncServiceTest {
 
     private MusicSearchItemResponse item(String id, String canonicalId, String artistId, String artistName) {
         return new MusicSearchItemResponse(id, canonicalId, "제목", artistName,
-                List.of(new MusicSearchItemResponse.MusicArtist(artistId, artistName, null)), null, null, null, null);
+                List.of(new MusicSearchItemResponse.MusicArtist(artistId, artistName, null)), null, null, null, null, null);
     }
 
     @Test
@@ -165,6 +165,8 @@ class YoutubeMusicSyncServiceTest {
 
         verify(youtubeVideoMatchRepository).upsert("v2", 11L, false, NOW);
         verify(youtubeVideoMatchRepository).upsert("v3", 12L, false, NOW);
+        verify(musicCatalogService).updateYoutubeVideoId(11L, "v2");
+        verify(musicCatalogService).updateYoutubeVideoId(12L, "v3");
         verify(userMusicLikeRepository).deleteByUserIdAndSourceAndMusicIdIn(USER_ID, LikeSource.YOUTUBE_MUSIC, List.of(99L));
         verify(userMusicLikeRepository).insertIfAbsent(USER_ID, 11L, "YOUTUBE_MUSIC");
         verify(userMusicLikeRepository).insertIfAbsent(USER_ID, 12L, "YOUTUBE_MUSIC");
@@ -258,6 +260,25 @@ class YoutubeMusicSyncServiceTest {
         assertThatThrownBy(() -> service.sync(USER_ID))
                 .isInstanceOfSatisfying(CustomException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(PlatformErrorCode.PLATFORM_NOT_CONNECTED));
+    }
+
+    @Test
+    @DisplayName("커버 영상은 원곡의 재생 영상으로 쓰지 않는다")
+    void coverVideoNotUsedForPlayback() {
+        connected();
+        VideoMatchItem cover = new VideoMatchItem("v1", "밤편지 cover", "누군가");
+        given(youtubeClient.getLikedMusicVideos("access")).willReturn(List.of(cover));
+        given(youtubeVideoMatchRepository.findAllByVideoIdIn(List.of("v1"))).willReturn(List.of());
+        MusicSearchItemResponse letter = item("r3", "c3", "a-iu", "IU");
+        given(musicApiClient.matchVideos(List.of(cover))).willReturn(new VideoMatchResponse(List.of(
+                new VideoMatchResponse.Result("v1", "matched", true, null, letter))));
+        given(musicCatalogService.getOrCreateMusicsFrom(List.of(letter))).willReturn(Map.of("r3", music(3, "c3", null)));
+        given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(BeanUtils.instantiateClass(User.class)));
+
+        service.sync(USER_ID);
+
+        verify(youtubeVideoMatchRepository).upsert("v1", 3L, true, NOW);
+        verify(musicCatalogService, never()).updateYoutubeVideoId(any(), any());
     }
 
     @Test
