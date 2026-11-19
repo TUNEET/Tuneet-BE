@@ -124,6 +124,25 @@ class AuthServiceTest {
             assertThat(user.getRefreshTokenHash()).isEqualTo(hash(NEW_REFRESH_TOKEN));
             assertThat(user.getRefreshTokenHash()).isNotEqualTo(NEW_REFRESH_TOKEN);
             assertThat(user.getRefreshTokenExpiresAt()).isAfter(LocalDateTime.now());
+            assertThat(response.getProfileCompleted()).isFalse();
+        }
+
+        @Test
+        @DisplayName("닉네임을 설정한 사용자면 프로필 설정 완료(true)를 반환한다")
+        void profileCompleted() {
+            // given
+            user.updateProfile("튜니", null);
+            given(customUserDetailsService.loadUserByUsername(EMAIL)).willReturn(new CustomUserDetails(user));
+            given(passwordEncoder.matches(PASSWORD, ENCODED_PASSWORD)).willReturn(true);
+            given(jwtProvider.createAccessToken(any(CustomUserDetails.class))).willReturn(ACCESS_TOKEN);
+            given(jwtProvider.createRefreshToken(USER_ID)).willReturn(NEW_REFRESH_TOKEN);
+            given(jwtProvider.getRefreshTokenExpiration()).willReturn(REFRESH_EXPIRATION);
+
+            // when
+            LoginResponse response = authService.login(loginRequest());
+
+            // then
+            assertThat(response.getProfileCompleted()).isTrue();
         }
 
         @Test
@@ -178,6 +197,7 @@ class AuthServiceTest {
             assertThat(response.getAccessToken()).isEqualTo(ACCESS_TOKEN);
             assertThat(response.getRefreshToken()).isEqualTo(NEW_REFRESH_TOKEN);
             assertThat(user.getRefreshTokenHash()).isEqualTo(hash(NEW_REFRESH_TOKEN));
+            assertThat(response.getProfileCompleted()).isFalse();
         }
 
         @Test

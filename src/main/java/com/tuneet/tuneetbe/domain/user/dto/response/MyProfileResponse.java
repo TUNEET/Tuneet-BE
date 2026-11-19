@@ -27,6 +27,9 @@ public class MyProfileResponse {
     @Schema(description = "프로필 사진 url", example = "https://...")
     private String profilePicture;
 
+    @Schema(description = "프로필 설정 완료 여부", example = "true")
+    private Boolean profileCompleted;
+
     @Schema(description = "프로필 음악")
     private MusicResponse profileMusic;
 

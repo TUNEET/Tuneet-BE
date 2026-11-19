@@ -207,6 +207,7 @@ public class UserService {
                 .userId(user.getId())
                 .nickname(user.getNickname())
                 .profilePicture(user.getProfilePicture())
+                .profileCompleted(user.isProfileCompleted())
                 .profileMusic(toMusicResponse(user.getProfileMusic()))
                 .genres(genreResponses)
                 .favoriteArtists(toArtistResponses(userArtistRepository.findAllWithArtistByUserIdOrderByIdAsc(userId)))

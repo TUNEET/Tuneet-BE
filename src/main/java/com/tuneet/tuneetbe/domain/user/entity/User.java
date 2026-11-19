@@ -82,6 +82,11 @@ public class User extends BaseTimeEntity {
         this.refreshTokenExpiresAt = null;
     }
 
+    // 프로필 설정 완료 여부
+    public boolean isProfileCompleted() {
+        return nickname != null;
+    }
+
     public void updateProfile(String nickname, String profilePicture) {
         if (nickname != null) {
             this.nickname = nickname;

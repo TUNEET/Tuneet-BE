@@ -942,6 +942,7 @@ class UserServiceTest {
             assertThat(response.getUserId()).isEqualTo(USER_ID);
             assertThat(response.getNickname()).isEqualTo("튜니");
             assertThat(response.getProfilePicture()).isEqualTo("profile.png");
+            assertThat(response.getProfileCompleted()).isTrue();
             assertThat(response.getProfileMusic()).isNull();
             assertThat(response.getGenres()).isEmpty();
             assertThat(response.getFavoriteArtists()).isEmpty();
@@ -966,7 +967,7 @@ class UserServiceTest {
         }
 
         @Test
-        @DisplayName("프로필을 설정하지 않은 사용자면 닉네임과 프로필 사진이 null이다")
+        @DisplayName("프로필을 설정하지 않은 사용자면 닉네임과 프로필 사진이 null이고 설정 완료가 false다")
         void profileNotSet() {
             // given
             User user = savedUser(null, null);
@@ -978,6 +979,7 @@ class UserServiceTest {
             // then
             assertThat(response.getNickname()).isNull();
             assertThat(response.getProfilePicture()).isNull();
+            assertThat(response.getProfileCompleted()).isFalse();
         }
 
         @Test
