@@ -14,4 +14,7 @@ public class LoginResponse {
 
     @Schema(description = "Refresh Token")
     private String refreshToken;
+
+    @Schema(description = "프로필 설정 완료 여부", example = "true")
+    private Boolean profileCompleted;
 }

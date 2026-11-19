@@ -63,6 +63,7 @@ public class AuthService {
         return LoginResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
+                .profileCompleted(userDetails.getUser().isProfileCompleted())
                 .build();
     }
 
@@ -96,6 +97,7 @@ public class AuthService {
         return LoginResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
+                .profileCompleted(user.isProfileCompleted())
                 .build();
     }
 
