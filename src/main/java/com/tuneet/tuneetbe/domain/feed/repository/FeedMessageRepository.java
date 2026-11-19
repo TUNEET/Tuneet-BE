@@ -5,10 +5,20 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
 public interface FeedMessageRepository extends JpaRepository<FeedMessage, Long> {
+
+    // 피드에 달린 메시지를 작성자, 노래와 함께 최신순으로 조회
+    @EntityGraph(attributePaths = {"user", "music"})
+    List<FeedMessage> findAllByFeedIdOrderByIdDesc(Long feedId);
+
+    // 사용자가 작성한 피드에 달린 메시지 ID 조회
+    @Query("select m.id from FeedMessage m where m.feed.user.id = :userId")
+    List<Long> findIdsByFeedUserId(@Param("userId") Long userId);
 
     // 사용자가 작성한 피드에 달린 메시지 전체 삭제
     void deleteAllByFeedUserId(Long userId);

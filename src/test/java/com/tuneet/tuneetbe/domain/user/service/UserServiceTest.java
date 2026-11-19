@@ -7,6 +7,7 @@ import com.tuneet.tuneetbe.domain.matching.service.TasteMatchService;
 import com.tuneet.tuneetbe.domain.user.enums.DistanceRange;
 import java.util.Map;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
+import com.tuneet.tuneetbe.domain.feed.service.FeedMessageReplyService;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.entity.Artist;
 import com.tuneet.tuneetbe.domain.music.entity.Genre;
@@ -136,6 +137,9 @@ class UserServiceTest {
 
     @Mock
     private UserArtistLikeRepository userArtistLikeRepository;
+
+    @Mock
+    private FeedMessageReplyService feedMessageReplyService;
 
     @InjectMocks
     private UserService userService;
@@ -442,12 +446,14 @@ class UserServiceTest {
         void deleteRelatedData() {
             // given
             given(userRepository.findByIdForUpdate(USER_ID)).willReturn(Optional.of(deletableUser()));
+            given(feedMessageRepository.findIdsByFeedUserId(USER_ID)).willReturn(List.of(501L));
 
             // when
             userService.deleteUser(USER_ID);
 
             // then
-            InOrder inOrder = inOrder(feedMessageRepository, feedRepository);
+            InOrder inOrder = inOrder(feedMessageReplyService, feedMessageRepository, feedRepository);
+            inOrder.verify(feedMessageReplyService).deleteRepliesOf(List.of(501L));
             inOrder.verify(feedMessageRepository).deleteAllByFeedUserId(USER_ID);
             inOrder.verify(feedRepository).deleteAllByUserId(USER_ID);
             verify(userGenreRepository).deleteAllByUserId(USER_ID);

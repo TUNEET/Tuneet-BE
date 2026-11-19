@@ -1,6 +1,7 @@
 package com.tuneet.tuneetbe.domain.user.service;
 
 import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
+import com.tuneet.tuneetbe.domain.feed.service.FeedMessageReplyService;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.dto.response.ArtistResponse;
 import com.tuneet.tuneetbe.domain.music.dto.response.GenreResponse;
@@ -72,6 +73,7 @@ public class UserService {
     private final UserBlockRepository userBlockRepository;
     private final FeedRepository feedRepository;
     private final FeedMessageRepository feedMessageRepository;
+    private final FeedMessageReplyService feedMessageReplyService;
     private final NotificationRepository notificationRepository;
     private final DeviceTokenRepository deviceTokenRepository;
     private final RoomRemover roomRemover;
@@ -482,7 +484,8 @@ public class UserService {
             throw new CustomException(UserErrorCode.USER_NOT_FOUND);
         }
 
-        // 작성한 피드와 피드에 달린 반응, 메시지 삭제
+        // 작성한 피드와 피드에 달린 반응, 메시지, 메시지 답장 삭제
+        feedMessageReplyService.deleteRepliesOf(feedMessageRepository.findIdsByFeedUserId(userId));
         feedMessageRepository.deleteAllByFeedUserId(userId);
         feedRepository.deleteAllByUserId(userId);
 

@@ -29,14 +29,23 @@ public class NotificationResponse {
     @Schema(description = "메시지가 달린 피드 고유번호 (누르면 피드 상세로 이동)", example = "3")
     private Long feedId;
 
-    @Schema(description = "메시지 내용", example = "이 노래도 좋아하실 것 같아요!")
+    @Schema(description = "코멘트 고유번호 (FEED_MESSAGE 알림에서 답장 보낼 때 사용)", example = "7")
+    private Long feedMessageId;
+
+    @Schema(description = "답장 고유번호 (FEED_MESSAGE_REPLY 알림에서 상세보기, 답장 보낼 때 사용, 코멘트 알림이면 null)", example = "12")
+    private Long replyId;
+
+    @Schema(description = "메시지 내용 (답장 알림이면 답장 내용)", example = "이 노래도 좋아하실 것 같아요!")
     private String messageContent;
 
-    @Schema(description = "메시지와 함께 보낸 노래")
+    @Schema(description = "메시지(답장)와 함께 보낸 노래")
     private MusicResponse music;
 
     @Schema(description = "읽음 여부", example = "false")
     private Boolean isRead;
+
+    @Schema(description = "내가 이 코멘트/답장에 이미 답장했는지 여부 (true면 답장 버튼 숨김)", example = "false")
+    private Boolean isReplied;
 
     @Schema(description = "알림 생성 시간", example = "2026-11-11T10:40:00")
     private LocalDateTime createdAt;

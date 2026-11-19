@@ -8,5 +8,8 @@ public enum NotificationType {
     FEED_MESSAGE,
 
     @Schema(description = "편지")
-    LETTER
+    LETTER,
+
+    @Schema(description = "피드 코멘트 답장")
+    FEED_MESSAGE_REPLY
 }
