@@ -80,6 +80,11 @@ public class MusicCatalogService {
         musicRepository.updateYoutubeVideoId(musicId, videoId);
     }
 
+    // 커버로 판정된 영상은 재생 영상에서 제거
+    public void clearYoutubeVideoId(Long musicId, String videoId) {
+        musicRepository.clearYoutubeVideoId(musicId, videoId);
+    }
+
     private void saveMusics(List<MusicSearchItemResponse> items) {
         Map<String, Long> artistIds = savePrimaryArtists(items);
         for (MusicSearchItemResponse item : items) {

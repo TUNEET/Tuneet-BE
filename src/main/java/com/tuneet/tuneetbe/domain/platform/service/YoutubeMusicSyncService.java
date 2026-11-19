@@ -169,10 +169,15 @@ public class YoutubeMusicSyncService {
                 if (music == null) {
                     continue;
                 }
-                youtubeVideoMatchRepository.upsert(result.videoId(), music.getId(), result.isCover(), now);
-                if (!result.isCover()) {
-                    musicCatalogService.updateYoutubeVideoId(music.getId(), result.videoId());
-                }
+                // 매칭 저장과 재생 영상 갱신을 함께 커밋 (재생 영상만 빠진 채 매칭이 저장되지 않도록)
+                transactionTemplate.executeWithoutResult(status -> {
+                    youtubeVideoMatchRepository.upsert(result.videoId(), music.getId(), result.isCover(), now);
+                    if (result.isCover()) {
+                        musicCatalogService.clearYoutubeVideoId(music.getId(), result.videoId());
+                    } else {
+                        musicCatalogService.updateYoutubeVideoId(music.getId(), result.videoId());
+                    }
+                });
                 songsByVideo.put(result.videoId(), LikedSong.from(music, result));
             }
         }
