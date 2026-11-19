@@ -279,6 +279,8 @@ class YoutubeMusicSyncServiceTest {
 
         verify(youtubeVideoMatchRepository).upsert("v1", 3L, true, NOW);
         verify(musicCatalogService, never()).updateYoutubeVideoId(any(), any());
+        // 예전에 원곡으로 저장된 같은 영상이면 재생 영상에서 제거
+        verify(musicCatalogService).clearYoutubeVideoId(3L, "v1");
     }
 
     @Test
