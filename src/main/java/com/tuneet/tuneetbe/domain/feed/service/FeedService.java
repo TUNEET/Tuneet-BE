@@ -495,7 +495,15 @@ public class FeedService {
         boolean hasNext = m < messages.size() || r < replies.size() || feedMessages.hasNext() || sentReplies.hasNext();
         String nextCursor = null;
         if (hasNext) {
-            nextCursor = (messageCursor == null ? "" : messageCursor) + "_" + (replyCursor == null ? "" : replyCursor);
+
+            // 아직 하나도 쓰지 않은 쪽은 이번에 조회한 가장 최신 id까지로 범위를 고정 (이후 새로 보낸 것이 다음 페이지에 끼지 않게)
+            if (messageCursor == null) {
+                messageCursor = messages.isEmpty() ? 0L : messages.get(0).getId() + 1;
+            }
+            if (replyCursor == null) {
+                replyCursor = replies.isEmpty() ? 0L : replies.get(0).getId() + 1;
+            }
+            nextCursor = messageCursor + "_" + replyCursor;
         }
 
         // 내가 좋아요한 곡 표시

@@ -733,9 +733,32 @@ class FeedServiceTest {
             assertThat(response.getMessages()).extracting("receiverNickname").containsExactly("산책하는 튜니", "커피 마시는 튜니");
             assertThat(response.getMessages().get(0).getMusic().getTitle()).isEqualTo("I GOT YOU");
             assertThat(response.getHasNext()).isTrue();
-            assertThat(response.getNextCursor()).isEqualTo("500_");
+            assertThat(response.getNextCursor()).isEqualTo("500_0");
             verify(feedMessageRepository, never())
                     .findByUserIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("이번 페이지에서 쓰지 않은 답장은 조회한 가장 최신 답장까지로 다음 커서 범위를 고정한다")
+        void keepUnusedSideRange() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            User owner = writer(OTHER_USER_ID, "산책하는 튜니", null);
+            Feed feed = savedFeed(FEED_ID, owner);
+            FeedMessage recent = sentAt(sentMessage(501L, me, feed), 10);
+            FeedMessage old = sentAt(sentMessage(500L, me, feed), 20);
+            FeedMessageReply oldReply = sentAt(sentReply(15L, old, me, owner, "답장"), 30);
+            given(feedMessageRepository.findByUserIdAndDeletedBySenderFalseOrderByIdDesc(USER_ID, pageable))
+                    .willReturn(new SliceImpl<>(List.of(recent, old), pageable, false));
+            givenReplies(List.of(oldReply), false);
+
+            // when
+            SentFeedMessageListResponse response = feedService.getSentMessages(USER_ID, null, SIZE);
+
+            // then
+            assertThat(response.getMessages()).extracting("feedMessageId").containsExactly(501L, 500L);
+            assertThat(response.getHasNext()).isTrue();
+            assertThat(response.getNextCursor()).isEqualTo("500_16");
         }
 
         @Test
