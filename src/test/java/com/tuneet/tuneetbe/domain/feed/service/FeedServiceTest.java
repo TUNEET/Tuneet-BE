@@ -11,7 +11,9 @@ import com.tuneet.tuneetbe.domain.feed.dto.response.FeedUpdateResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.SentFeedMessageListResponse;
 import com.tuneet.tuneetbe.domain.feed.entity.Feed;
 import com.tuneet.tuneetbe.domain.feed.entity.FeedMessage;
+import com.tuneet.tuneetbe.domain.feed.entity.FeedMessageReply;
 import com.tuneet.tuneetbe.domain.feed.exception.FeedErrorCode;
+import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageReplyRepository;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.entity.Music;
@@ -88,6 +90,9 @@ class FeedServiceTest {
 
     @Mock
     private FeedMessageReplyService feedMessageReplyService;
+
+    @Mock
+    private FeedMessageReplyRepository feedMessageReplyRepository;
 
     @InjectMocks
     private FeedService feedService;
@@ -657,6 +662,18 @@ class FeedServiceTest {
         }
     }
 
+    private FeedMessageReply sentReply(Long id, FeedMessage feedMessage, User sender, User receiver, String content) {
+        FeedMessageReply reply = FeedMessageReply.builder()
+                .feedMessage(feedMessage)
+                .sender(sender)
+                .receiver(receiver)
+                .music(savedMusic())
+                .replyContent(content)
+                .build();
+        ReflectionTestUtils.setField(reply, "id", id);
+        return reply;
+    }
+
     private FeedMessage sentMessage(Long id, User sender, Feed feed) {
         FeedMessage message = FeedMessage.builder()
                 .user(sender)
@@ -796,6 +813,54 @@ class FeedServiceTest {
             assertThat(first.getMessageContent()).isEqualTo("이 노래도 좋아하실 것 같아요!");
             assertThat(first.getMusic()).isNotNull();
             verify(musicLikeMarker).mark(eq(USER_ID), any());
+        }
+
+        @Test
+        @DisplayName("코멘트마다 주고받은 답장을 오래된 순으로 함께 반환하고, 답장이 없으면 빈 목록을 반환한다")
+        void withReplies() {
+            // given
+            User owner = writer(2L, "피드 주인", null);
+            Feed feed = savedFeed(FEED_ID, owner);
+            User singer = writer(3L, "노래하는 튜니", null);
+            User guitar = writer(4L, "기타치는 튜니", null);
+            FeedMessage replied = sentMessage(502L, singer, feed);
+            FeedMessage notReplied = sentMessage(501L, guitar, feed);
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.of(feed));
+            given(feedMessageRepository.findAllByFeedIdOrderByIdDesc(FEED_ID)).willReturn(List.of(replied, notReplied));
+            given(feedMessageReplyRepository.findAllByFeedMessageIdInOrderByIdAsc(List.of(502L, 501L)))
+                    .willReturn(List.of(sentReply(11L, replied, owner, singer, "추천 고마워요!"), sentReply(12L, replied, singer, owner, "다음에도 보낼게요")));
+
+            // when
+            FeedMessageListResponse response = feedService.getFeedMessages(USER_ID, FEED_ID);
+
+            // then
+            FeedMessageResponse first = response.getMessages().get(0);
+            assertThat(first.getFeedMessageId()).isEqualTo(502L);
+            assertThat(first.getReplies()).extracting(FeedMessageResponse.Reply::getReplyId).containsExactly(11L, 12L);
+            assertThat(first.getReplies()).extracting(FeedMessageResponse.Reply::getSenderNickname).containsExactly("피드 주인", "노래하는 튜니");
+            assertThat(first.getReplies().get(0).getReplyContent()).isEqualTo("추천 고마워요!");
+            assertThat(first.getReplies().get(0).getMusic().getTitle()).isEqualTo("Pretty Girl");
+            assertThat(response.getMessages().get(1).getReplies()).isEmpty();
+
+            // 코멘트 곡 2개와 답장 곡 2개를 한 번에 좋아요 표시
+            ArgumentCaptor<List> musics = ArgumentCaptor.forClass(List.class);
+            verify(musicLikeMarker).mark(eq(USER_ID), musics.capture());
+            assertThat(musics.getValue()).hasSize(4);
+        }
+
+        @Test
+        @DisplayName("보여줄 코멘트가 없으면 답장을 조회하지 않는다")
+        void noMessages() {
+            // given
+            given(feedRepository.findById(FEED_ID)).willReturn(Optional.of(savedFeed(FEED_ID, writer(2L, "피드 주인", null))));
+            given(feedMessageRepository.findAllByFeedIdOrderByIdDesc(FEED_ID)).willReturn(List.of());
+
+            // when
+            FeedMessageListResponse response = feedService.getFeedMessages(USER_ID, FEED_ID);
+
+            // then
+            assertThat(response.getMessages()).isEmpty();
+            verify(feedMessageReplyRepository, never()).findAllByFeedMessageIdInOrderByIdAsc(any());
         }
 
         @Test
