@@ -172,9 +172,9 @@ public class YoutubeMusicSyncService {
                 // 매칭 저장과 재생 영상 갱신을 함께 커밋 (재생 영상만 빠진 채 매칭이 저장되지 않도록)
                 transactionTemplate.executeWithoutResult(status -> {
                     youtubeVideoMatchRepository.upsert(result.videoId(), music.getId(), result.isCover(), now);
-                    if (result.isCover()) {
-                        musicCatalogService.clearYoutubeVideoId(music.getId(), result.videoId());
-                    } else {
+                    // 영상은 지금 매칭된 원곡의 재생 영상으로만 남김 (커버로 바뀌거나 다른 곡으로 옮겨지면 이전 곡에서 제거)
+                    musicCatalogService.clearYoutubeVideoId(result.videoId());
+                    if (!result.isCover()) {
                         musicCatalogService.updateYoutubeVideoId(music.getId(), result.videoId());
                     }
                 });

@@ -37,9 +37,9 @@ public interface MusicRepository extends JpaRepository<Music, Long> {
     @Query(value = "UPDATE music SET youtube_video_id = :videoId WHERE music_id = :musicId", nativeQuery = true)
     void updateYoutubeVideoId(@Param("musicId") Long musicId, @Param("videoId") String videoId);
 
-    // 커버로 다시 판정된 영상이면 재생 영상에서 제거 (다른 영상이면 그대로)
+    // 이 영상을 재생 영상으로 쓰는 곡에서 모두 제거 (다른 영상이면 그대로)
     @Transactional
     @Modifying
-    @Query(value = "UPDATE music SET youtube_video_id = NULL WHERE music_id = :musicId AND youtube_video_id = :videoId", nativeQuery = true)
-    void clearYoutubeVideoId(@Param("musicId") Long musicId, @Param("videoId") String videoId);
+    @Query(value = "UPDATE music SET youtube_video_id = NULL WHERE youtube_video_id = :videoId", nativeQuery = true)
+    void clearYoutubeVideoId(@Param("videoId") String videoId);
 }
