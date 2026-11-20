@@ -9,6 +9,8 @@ import com.tuneet.tuneetbe.domain.feed.dto.response.FeedMessageResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedSendMessageResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.FeedUpdateResponse;
 import com.tuneet.tuneetbe.domain.feed.dto.response.SentFeedMessageListResponse;
+import com.tuneet.tuneetbe.domain.feed.dto.response.SentFeedMessageResponse;
+import com.tuneet.tuneetbe.domain.feed.enums.SentMessageType;
 import com.tuneet.tuneetbe.domain.feed.entity.Feed;
 import com.tuneet.tuneetbe.domain.feed.entity.FeedMessage;
 import com.tuneet.tuneetbe.domain.feed.entity.FeedMessageReply;
@@ -691,6 +693,22 @@ class FeedServiceTest {
 
         private static final int SIZE = 2;
         private final PageRequest pageable = PageRequest.of(0, SIZE);
+        private final LocalDateTime now = LocalDateTime.of(2026, 11, 20, 18, 0);
+
+        private FeedMessage sentAt(FeedMessage message, int minutesAgo) {
+            ReflectionTestUtils.setField(message, "createdAt", now.minusMinutes(minutesAgo));
+            return message;
+        }
+
+        private FeedMessageReply sentAt(FeedMessageReply reply, int minutesAgo) {
+            ReflectionTestUtils.setField(reply, "createdAt", now.minusMinutes(minutesAgo));
+            return reply;
+        }
+
+        private void givenReplies(List<FeedMessageReply> replies, boolean hasNext) {
+            given(feedMessageReplyRepository.findBySenderIdAndDeletedBySenderFalseOrderByIdDesc(USER_ID, pageable))
+                    .willReturn(new SliceImpl<>(replies, pageable, hasNext));
+        }
 
         @Test
         @DisplayName("커서가 없으면 내가 보낸 최신 메시지부터 받은 사람(피드 작성자)과 함께 조회한다")
@@ -699,39 +717,140 @@ class FeedServiceTest {
             User me = writer(USER_ID, "튜니", null);
             Feed walkFeed = savedFeed(FEED_ID, writer(OTHER_USER_ID, "산책하는 튜니", null));
             Feed coffeeFeed = savedFeed(200L, writer(3L, "커피 마시는 튜니", null));
-            FeedMessage recent = sentMessage(501L, me, walkFeed);
-            FeedMessage old = sentMessage(500L, me, coffeeFeed);
+            FeedMessage recent = sentAt(sentMessage(501L, me, walkFeed), 10);
+            FeedMessage old = sentAt(sentMessage(500L, me, coffeeFeed), 20);
             given(feedMessageRepository.findByUserIdAndDeletedBySenderFalseOrderByIdDesc(USER_ID, pageable))
                     .willReturn(new SliceImpl<>(List.of(recent, old), pageable, true));
+            givenReplies(List.of(), false);
+
+            // when
+            SentFeedMessageListResponse response = feedService.getSentMessages(USER_ID, null, SIZE);
+
+            // then
+            assertThat(response.getMessages()).extracting("type").containsOnly(SentMessageType.COMMENT);
+            assertThat(response.getMessages()).extracting("feedMessageId").containsExactly(501L, 500L);
+            assertThat(response.getMessages()).extracting("feedId").containsExactly(FEED_ID, 200L);
+            assertThat(response.getMessages()).extracting("receiverNickname").containsExactly("산책하는 튜니", "커피 마시는 튜니");
+            assertThat(response.getMessages().get(0).getMusic().getTitle()).isEqualTo("I GOT YOU");
+            assertThat(response.getHasNext()).isTrue();
+            assertThat(response.getNextCursor()).isEqualTo("500_0");
+            verify(feedMessageRepository, never())
+                    .findByUserIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("이번 페이지에서 쓰지 않은 답장은 조회한 가장 최신 답장까지로 다음 커서 범위를 고정한다")
+        void keepUnusedSideRange() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            User owner = writer(OTHER_USER_ID, "산책하는 튜니", null);
+            Feed feed = savedFeed(FEED_ID, owner);
+            FeedMessage recent = sentAt(sentMessage(501L, me, feed), 10);
+            FeedMessage old = sentAt(sentMessage(500L, me, feed), 20);
+            FeedMessageReply oldReply = sentAt(sentReply(15L, old, me, owner, "답장"), 30);
+            given(feedMessageRepository.findByUserIdAndDeletedBySenderFalseOrderByIdDesc(USER_ID, pageable))
+                    .willReturn(new SliceImpl<>(List.of(recent, old), pageable, false));
+            givenReplies(List.of(oldReply), false);
 
             // when
             SentFeedMessageListResponse response = feedService.getSentMessages(USER_ID, null, SIZE);
 
             // then
             assertThat(response.getMessages()).extracting("feedMessageId").containsExactly(501L, 500L);
-            assertThat(response.getMessages()).extracting("feedId").containsExactly(FEED_ID, 200L);
-            assertThat(response.getMessages()).extracting("receiverNickname").containsExactly("산책하는 튜니", "커피 마시는 튜니");
-            assertThat(response.getMessages().get(0).getMusic().getTitle()).isEqualTo("I GOT YOU");
             assertThat(response.getHasNext()).isTrue();
-            verify(feedMessageRepository, never())
-                    .findByUserIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(any(), any(), any());
+            assertThat(response.getNextCursor()).isEqualTo("500_16");
         }
 
         @Test
-        @DisplayName("커서가 있으면 커서보다 이전 메시지를 조회한다")
-        void nextPage() {
+        @DisplayName("보낸 코멘트와 보낸 답장을 보낸 시간 최신순으로 합치고, 답장은 답장 받은 사람과 함께 반환한다")
+        void withReplies() {
             // given
-            FeedMessage message = sentMessage(499L, writer(USER_ID, "튜니", null), savedFeed(FEED_ID, writer(OTHER_USER_ID, "산책하는 튜니", null)));
-            given(feedMessageRepository.findByUserIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(USER_ID, 500L, pageable))
-                    .willReturn(new SliceImpl<>(List.of(message), pageable, false));
+            User me = writer(USER_ID, "튜니", null);
+            User owner = writer(OTHER_USER_ID, "산책하는 튜니", null);
+            Feed walkFeed = savedFeed(FEED_ID, owner);
+            FeedMessage myComment = sentAt(sentMessage(501L, me, walkFeed), 50);
+            FeedMessage recent = sentAt(sentMessage(502L, me, walkFeed), 30);
+            FeedMessageReply reply = sentAt(sentReply(15L, myComment, me, owner, "고마워요!"), 10);
+            FeedMessageReply oldReply = sentAt(sentReply(14L, myComment, me, owner, "처음 답장"), 40);
+            given(feedMessageRepository.findByUserIdAndDeletedBySenderFalseOrderByIdDesc(USER_ID, pageable))
+                    .willReturn(new SliceImpl<>(List.of(recent, myComment), pageable, false));
+            givenReplies(List.of(reply, oldReply), false);
 
             // when
-            SentFeedMessageListResponse response = feedService.getSentMessages(USER_ID, 500L, SIZE);
+            SentFeedMessageListResponse response = feedService.getSentMessages(USER_ID, null, SIZE);
 
             // then
-            assertThat(response.getMessages()).extracting("feedMessageId").containsExactly(499L);
+            assertThat(response.getMessages()).extracting("type").containsExactly(SentMessageType.REPLY, SentMessageType.COMMENT);
+            SentFeedMessageResponse first = response.getMessages().get(0);
+            assertThat(first.getReplyId()).isEqualTo(15L);
+            assertThat(first.getFeedMessageId()).isEqualTo(501L);
+            assertThat(first.getFeedId()).isEqualTo(FEED_ID);
+            assertThat(first.getReceiverNickname()).isEqualTo("산책하는 튜니");
+            assertThat(first.getMessageContent()).isEqualTo("고마워요!");
+            assertThat(first.getMusic().getTitle()).isEqualTo("Pretty Girl");
+            assertThat(response.getMessages().get(1).getReplyId()).isNull();
+            assertThat(response.getHasNext()).isTrue();
+            assertThat(response.getNextCursor()).isEqualTo("502_15");
+        }
+
+        @Test
+        @DisplayName("커서가 있으면 코멘트와 답장을 각자 커서보다 이전 것으로 조회한다")
+        void nextPage() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            User owner = writer(OTHER_USER_ID, "산책하는 튜니", null);
+            Feed feed = savedFeed(FEED_ID, owner);
+            FeedMessage message = sentAt(sentMessage(499L, me, feed), 60);
+            FeedMessageReply reply = sentAt(sentReply(13L, message, me, owner, "답장"), 50);
+            given(feedMessageRepository.findByUserIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(USER_ID, 500L, pageable))
+                    .willReturn(new SliceImpl<>(List.of(message), pageable, false));
+            given(feedMessageReplyRepository.findBySenderIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(USER_ID, 14L, pageable))
+                    .willReturn(new SliceImpl<>(List.of(reply), pageable, false));
+
+            // when
+            SentFeedMessageListResponse response = feedService.getSentMessages(USER_ID, "500_14", SIZE);
+
+            // then
+            assertThat(response.getMessages()).extracting("type").containsExactly(SentMessageType.REPLY, SentMessageType.COMMENT);
             assertThat(response.getHasNext()).isFalse();
+            assertThat(response.getNextCursor()).isNull();
             verify(feedMessageRepository, never()).findByUserIdAndDeletedBySenderFalseOrderByIdDesc(any(), any());
+            verify(feedMessageReplyRepository, never()).findBySenderIdAndDeletedBySenderFalseOrderByIdDesc(any(), any());
+        }
+
+        @Test
+        @DisplayName("한쪽 커서가 비어 있으면 그쪽은 처음부터 조회한다")
+        void emptySideCursor() {
+            // given
+            given(feedMessageRepository.findByUserIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(USER_ID, 500L, pageable))
+                    .willReturn(new SliceImpl<>(List.of(), pageable, false));
+            givenReplies(List.of(), false);
+
+            // when
+            SentFeedMessageListResponse response = feedService.getSentMessages(USER_ID, "500_", SIZE);
+
+            // then
+            assertThat(response.getMessages()).isEmpty();
+            verify(feedMessageReplyRepository).findBySenderIdAndDeletedBySenderFalseOrderByIdDesc(USER_ID, pageable);
+        }
+
+        @Test
+        @DisplayName("답장 받은 사람이 탈퇴했으면 탈퇴한 사용자로 표시한다")
+        void deletedReceiver() {
+            // given
+            User me = writer(USER_ID, "튜니", null);
+            User commenter = writer(3L, "탈퇴 예정", null);
+            commenter.deleteUser(LocalDateTime.now());
+            FeedMessage comment = sentMessage(501L, commenter, savedFeed(FEED_ID, me));
+            given(feedMessageRepository.findByUserIdAndDeletedBySenderFalseOrderByIdDesc(USER_ID, pageable))
+                    .willReturn(new SliceImpl<>(List.of(), pageable, false));
+            givenReplies(List.of(sentAt(sentReply(15L, comment, me, commenter, "답장"), 10)), false);
+
+            // when
+            SentFeedMessageListResponse response = feedService.getSentMessages(USER_ID, null, SIZE);
+
+            // then
+            assertThat(response.getMessages()).extracting("receiverNickname").containsExactly("탈퇴한 사용자");
         }
 
         @Test
@@ -740,6 +859,7 @@ class FeedServiceTest {
             // given
             given(feedMessageRepository.findByUserIdAndDeletedBySenderFalseOrderByIdDesc(USER_ID, pageable))
                     .willReturn(new SliceImpl<>(List.of(), pageable, false));
+            givenReplies(List.of(), false);
 
             // when
             SentFeedMessageListResponse response = feedService.getSentMessages(USER_ID, null, SIZE);
@@ -747,6 +867,7 @@ class FeedServiceTest {
             // then
             assertThat(response.getMessages()).isEmpty();
             assertThat(response.getHasNext()).isFalse();
+            assertThat(response.getNextCursor()).isNull();
         }
     }
 
@@ -755,14 +876,17 @@ class FeedServiceTest {
     class DeleteAllSentMessages {
 
         @Test
-        @DisplayName("내가 보낸 메시지를 보낸 목록에서만 삭제하고 메시지와 알림은 지우지 않는다")
+        @DisplayName("내가 보낸 메시지와 답장을 보낸 목록에서만 삭제하고 메시지, 답장, 알림은 지우지 않는다")
         void success() {
             // given
             User me = writer(USER_ID, "튜니", null);
-            Feed feed = savedFeed(FEED_ID, writer(OTHER_USER_ID, "산책하는 튜니", null));
+            User owner = writer(OTHER_USER_ID, "산책하는 튜니", null);
+            Feed feed = savedFeed(FEED_ID, owner);
             FeedMessage first = sentMessage(500L, me, feed);
             FeedMessage second = sentMessage(501L, me, feed);
+            FeedMessageReply reply = sentReply(15L, first, me, owner, "답장");
             given(feedMessageRepository.findAllByUserIdAndDeletedBySenderFalse(USER_ID)).willReturn(List.of(first, second));
+            given(feedMessageReplyRepository.findAllBySenderIdAndDeletedBySenderFalse(USER_ID)).willReturn(List.of(reply));
 
             // when
             feedService.deleteAllSentMessages(USER_ID);
@@ -770,7 +894,9 @@ class FeedServiceTest {
             // then
             assertThat(first.getDeletedBySender()).isTrue();
             assertThat(second.getDeletedBySender()).isTrue();
+            assertThat(reply.getDeletedBySender()).isTrue();
             verify(feedMessageRepository, never()).deleteAll(any());
+            verify(feedMessageReplyRepository, never()).deleteAll(any());
             verify(notificationRepository, never()).deleteAllByTypeAndTargetIdIn(any(), any());
         }
 
@@ -779,12 +905,14 @@ class FeedServiceTest {
         void empty() {
             // given
             given(feedMessageRepository.findAllByUserIdAndDeletedBySenderFalse(USER_ID)).willReturn(List.of());
+            given(feedMessageReplyRepository.findAllBySenderIdAndDeletedBySenderFalse(USER_ID)).willReturn(List.of());
 
             // when
             feedService.deleteAllSentMessages(USER_ID);
 
             // then
             verify(feedMessageRepository).findAllByUserIdAndDeletedBySenderFalse(USER_ID);
+            verify(feedMessageReplyRepository).findAllBySenderIdAndDeletedBySenderFalse(USER_ID);
         }
     }
 

@@ -43,6 +43,9 @@ public class FeedMessageReply {
     @Column(nullable = false)
     private String replyContent; // 답장 내용 (최대 100자)
 
+    @Column(nullable = false)
+    private Boolean deletedBySender = false; // 발신자 삭제 여부 (보낸 목록에서만 숨김)
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt; // 보낸 일시
@@ -54,5 +57,10 @@ public class FeedMessageReply {
         this.receiver = receiver;
         this.music = music;
         this.replyContent = replyContent;
+    }
+
+    // 보낸 사람의 보낸 목록에서 삭제 처리 (받은 사람의 알림, 답장 상세에는 그대로 남음)
+    public void deleteBySender() {
+        this.deletedBySender = true;
     }
 }

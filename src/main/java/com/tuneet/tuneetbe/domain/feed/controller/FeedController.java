@@ -17,6 +17,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -201,11 +202,13 @@ public class FeedController {
     }
 
     // 보낸 코멘트 리스트 보기
-    @Operation(summary = "보낸 코멘트 리스트 보기", description = "사용자가 다른 사용자의 피드에 보낸 메시지 목록을 최신순으로 조회하는 API")
+    @Operation(summary = "보낸 코멘트 리스트 보기", description = "사용자가 보낸 코멘트와 답장 목록을 최신순으로 조회하는 API (다음 페이지는 응답의 nextCursor를 cursor로 전달)")
     @GetMapping("/feeds/messages/sent")
     public ResponseEntity<BaseResponse<SentFeedMessageListResponse>> getSentMessages(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @RequestParam(required = false) Long cursor,
+            @RequestParam(required = false)
+            @Pattern(regexp = "^(\\d{0,18}_\\d{0,18})?$", message = "올바른 커서가 아닙니다.")
+            String cursor,
             @RequestParam(defaultValue = "20")
             @Min(value = 1, message = "size는 1 이상이어야 합니다.")
             @Max(value = 50, message = "size는 50 이하여야 합니다.")
@@ -219,7 +222,7 @@ public class FeedController {
     }
 
     // 보낸 코멘트 전체 삭제
-    @Operation(summary = "보낸 코멘트 전체 삭제", description = "사용자가 보낸 메시지를 보낸 목록에서 모두 삭제하는 API (받은 사람의 알림에는 그대로 남음)")
+    @Operation(summary = "보낸 코멘트 전체 삭제", description = "사용자가 보낸 코멘트와 답장을 보낸 목록에서 모두 삭제하는 API (받은 사람의 알림에는 그대로 남음)")
     @DeleteMapping("/feeds/messages/sent")
     public ResponseEntity<BaseResponse<Void>> deleteAllSentMessages(
             @AuthenticationPrincipal CustomUserDetails userDetails) {
