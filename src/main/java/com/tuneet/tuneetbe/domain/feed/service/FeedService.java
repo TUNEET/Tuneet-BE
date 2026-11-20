@@ -5,6 +5,7 @@ import com.tuneet.tuneetbe.domain.feed.dto.response.*;
 import com.tuneet.tuneetbe.domain.feed.entity.Feed;
 import com.tuneet.tuneetbe.domain.feed.entity.FeedMessage;
 import com.tuneet.tuneetbe.domain.feed.entity.FeedMessageReply;
+import com.tuneet.tuneetbe.domain.feed.enums.SentMessageType;
 import com.tuneet.tuneetbe.domain.feed.exception.FeedErrorCode;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageReplyRepository;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
@@ -434,25 +435,67 @@ public class FeedService {
     }
 
     // 보낸 코멘트 리스트 보기
-    public SentFeedMessageListResponse getSentMessages(Long userId, Long cursor, int size) {
+    public SentFeedMessageListResponse getSentMessages(Long userId, String cursor, int size) {
+
+        // 커서 해석 ("코멘트 커서_답장 커서", 비어 있는 쪽은 처음부터)
+        Long messageCursor = null;
+        Long replyCursor = null;
+        if (cursor != null && !cursor.isEmpty()) {
+            String[] parts = cursor.split("_", -1);
+            messageCursor = parts[0].isEmpty() ? null : Long.parseLong(parts[0]);
+            replyCursor = parts[1].isEmpty() ? null : Long.parseLong(parts[1]);
+        }
 
         Pageable pageable = PageRequest.of(0, size);
         Slice<FeedMessage> feedMessages;
+        Slice<FeedMessageReply> sentReplies;
 
         // 커서가 없으면 내가 보낸 최신 메시지부터 조회
-        if (cursor == null) {
+        if (messageCursor == null) {
             feedMessages = feedMessageRepository.findByUserIdAndDeletedBySenderFalseOrderByIdDesc(userId, pageable);
         }
 
         // 커서가 있으면 커서보다 이전 메시지 조회
         else {
-            feedMessages = feedMessageRepository.findByUserIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(userId, cursor, pageable);
+            feedMessages = feedMessageRepository.findByUserIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(userId, messageCursor, pageable);
         }
 
-        // 응답 목록 세팅
+        // 내가 보낸 답장도 같은 방식으로 조회
+        if (replyCursor == null) {
+            sentReplies = feedMessageReplyRepository.findBySenderIdAndDeletedBySenderFalseOrderByIdDesc(userId, pageable);
+        }
+        else {
+            sentReplies = feedMessageReplyRepository.findBySenderIdAndDeletedBySenderFalseAndIdLessThanOrderByIdDesc(userId, replyCursor, pageable);
+        }
+
+        // 코멘트와 답장을 보낸 시간 최신순으로 합쳐 size개까지 세팅 (사용한 마지막 id가 다음 커서)
+        List<FeedMessage> messages = feedMessages.getContent();
+        List<FeedMessageReply> replies = sentReplies.getContent();
         List<SentFeedMessageResponse> messageResponses = new ArrayList<>();
-        for (FeedMessage feedMessage : feedMessages.getContent()) {
-            messageResponses.add(toSentFeedMessageResponse(feedMessage));
+        int m = 0;
+        int r = 0;
+        while (messageResponses.size() < size && (m < messages.size() || r < replies.size())) {
+
+            boolean takeMessage = r >= replies.size()
+                    || (m < messages.size() && !messages.get(m).getCreatedAt().isBefore(replies.get(r).getCreatedAt()));
+
+            if (takeMessage) {
+                FeedMessage feedMessage = messages.get(m++);
+                messageResponses.add(toSentFeedMessageResponse(feedMessage));
+                messageCursor = feedMessage.getId();
+            }
+            else {
+                FeedMessageReply reply = replies.get(r++);
+                messageResponses.add(toSentReplyResponse(reply));
+                replyCursor = reply.getId();
+            }
+        }
+
+        // 남은 코멘트나 답장이 있으면 다음 페이지 있음
+        boolean hasNext = m < messages.size() || r < replies.size() || feedMessages.hasNext() || sentReplies.hasNext();
+        String nextCursor = null;
+        if (hasNext) {
+            nextCursor = (messageCursor == null ? "" : messageCursor) + "_" + (replyCursor == null ? "" : replyCursor);
         }
 
         // 내가 좋아요한 곡 표시
@@ -461,7 +504,34 @@ public class FeedService {
         // 응답 반환
         return SentFeedMessageListResponse.builder()
                 .messages(messageResponses)
-                .hasNext(feedMessages.hasNext())
+                .hasNext(hasNext)
+                .nextCursor(nextCursor)
+                .build();
+    }
+
+    // 보낸 답장 엔티티를 응답 dto로 변환
+    private SentFeedMessageResponse toSentReplyResponse(FeedMessageReply reply) {
+
+        FeedMessage feedMessage = reply.getFeedMessage(); // 답장이 이어지는 처음 코멘트
+        User receiver = reply.getReceiver(); // 답장 받은 사람
+        Music music = reply.getMusic(); // 답장과 함께 보낸 노래
+
+        return SentFeedMessageResponse.builder()
+                .type(SentMessageType.REPLY)
+                .feedMessageId(feedMessage.getId())
+                .replyId(reply.getId())
+                .feedId(feedMessage.getFeed().getId())
+                .receiverId(receiver.getId())
+                .receiverNickname(receiver.isDeleted() ? DELETED_USER_NICKNAME : receiver.getNickname())
+                .music(MusicResponse.builder()
+                        .musicId(music.getExternalId())
+                        .title(music.getTitle())
+                        .artist(music.getArtist())
+                        .musicPicture(music.getMusicPicture())
+                        .videoId(music.getYoutubeVideoId())
+                        .build())
+                .messageContent(reply.getReplyContent())
+                .createdAt(reply.getCreatedAt())
                 .build();
     }
 
@@ -474,6 +544,7 @@ public class FeedService {
 
         // 피드 작성자가 탈퇴하면 피드와 메시지가 함께 삭제되기 때문에 탈퇴한 사용자 처리는 하지 않음
         return SentFeedMessageResponse.builder()
+                .type(SentMessageType.COMMENT)
                 .feedMessageId(feedMessage.getId())
                 .feedId(feed.getId())
                 .receiverId(receiver.getId())
@@ -502,8 +573,14 @@ public class FeedService {
             feedMessage.deleteBySender();
         }
 
+        // 내가 보낸 답장도 보낸 목록에서 삭제 처리 (받은 사람의 알림, 답장 상세에는 그대로 남음)
+        List<FeedMessageReply> sentReplies = feedMessageReplyRepository.findAllBySenderIdAndDeletedBySenderFalse(userId);
+        for (FeedMessageReply reply : sentReplies) {
+            reply.deleteBySender();
+        }
+
         // 로그 출력
-        log.info("[FeedService] 보낸 코멘트 전체 삭제 성공: userId = {}, count = {}", userId, feedMessages.size());
+        log.info("[FeedService] 보낸 코멘트 전체 삭제 성공: userId = {}, count = {}, replyCount = {}", userId, feedMessages.size(), sentReplies.size());
     }
 
     // 나와 차단 관계인 사용자 id 목록 (내가 차단한 사용자 + 나를 차단한 사용자)
