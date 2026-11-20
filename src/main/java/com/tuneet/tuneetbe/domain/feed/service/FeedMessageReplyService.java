@@ -272,6 +272,7 @@ public class FeedMessageReplyService {
                 .title(music.getTitle())
                 .artist(music.getArtist())
                 .musicPicture(music.getMusicPicture())
+                .videoId(music.getYoutubeVideoId())
                 .build();
     }
 }

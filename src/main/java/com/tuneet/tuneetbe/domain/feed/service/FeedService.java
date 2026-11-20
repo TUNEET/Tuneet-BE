@@ -75,6 +75,7 @@ public class FeedService {
                         .title(music.getTitle())
                         .artist(music.getArtist())
                         .musicPicture(music.getMusicPicture())
+                        .videoId(music.getYoutubeVideoId())
                         .build())
                 .content(feed.getContent())
                 .createdAt(feed.getCreatedAt())
@@ -119,6 +120,7 @@ public class FeedService {
                         .title(music.getTitle())
                         .artist(music.getArtist())
                         .musicPicture(music.getMusicPicture())
+                        .videoId(music.getYoutubeVideoId())
                         .build())
                 .content(feed.getContent())
                 .createdAt(feed.getCreatedAt())
@@ -208,6 +210,7 @@ public class FeedService {
                         .title(updatedMusic.getTitle())
                         .artist(updatedMusic.getArtist())
                         .musicPicture(updatedMusic.getMusicPicture())
+                        .videoId(updatedMusic.getYoutubeVideoId())
                         .build())
                 .content(feed.getContent())
                 .createdAt(feed.getCreatedAt())
@@ -312,6 +315,7 @@ public class FeedService {
                         .title(music.getTitle())
                         .artist(music.getArtist())
                         .musicPicture(music.getMusicPicture())
+                        .videoId(music.getYoutubeVideoId())
                         .build())
                 .messageContent(messageContent)
                 .createdAt(feedMessage.getCreatedAt())
@@ -349,6 +353,7 @@ public class FeedService {
                         .title(music.getTitle())
                         .artist(music.getArtist())
                         .musicPicture(music.getMusicPicture())
+                        .videoId(music.getYoutubeVideoId())
                         .build();
             }
 
@@ -420,6 +425,7 @@ public class FeedService {
                         .title(music.getTitle())
                         .artist(music.getArtist())
                         .musicPicture(music.getMusicPicture())
+                        .videoId(music.getYoutubeVideoId())
                         .build())
                 .messageContent(feedMessage.getMessageContent())
                 .createdAt(feedMessage.getCreatedAt())

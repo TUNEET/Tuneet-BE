@@ -75,12 +75,23 @@ public class MusicCatalogService {
         return findMusics(externalIds);
     }
 
+    // 재생용 유튜브 영상 교체
+    public void updateYoutubeVideoId(Long musicId, String videoId) {
+        musicRepository.updateYoutubeVideoId(musicId, videoId);
+    }
+
+    // 영상의 매칭이 바뀌면 이전 곡의 재생 영상에서 제거
+    public void clearYoutubeVideoId(String videoId) {
+        musicRepository.clearYoutubeVideoId(videoId);
+    }
+
     private void saveMusics(List<MusicSearchItemResponse> items) {
         Map<String, Long> artistIds = savePrimaryArtists(items);
         for (MusicSearchItemResponse item : items) {
             Long artistId = item.artists().isEmpty() ? null : artistIds.get(item.artists().get(0).id());
             musicRepository.insertIfAbsent(
-                    item.title(), item.artist(), item.coverUrl(), item.id(), item.canonicalId(), artistId);
+                    item.title(), item.artist(), item.coverUrl(), item.id(), item.canonicalId(), artistId,
+                    item.videoId());
         }
     }
 
