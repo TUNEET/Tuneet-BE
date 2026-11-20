@@ -28,6 +28,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
@@ -49,6 +50,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -165,8 +167,12 @@ class YoutubeMusicSyncServiceTest {
 
         verify(youtubeVideoMatchRepository).upsert("v2", 11L, false, NOW);
         verify(youtubeVideoMatchRepository).upsert("v3", 12L, false, NOW);
-        verify(musicCatalogService).updateYoutubeVideoId(11L, "v2");
-        verify(musicCatalogService).updateYoutubeVideoId(12L, "v3");
+        // 다른 곡에 남아 있던 같은 영상을 지운 뒤 지금 매칭된 곡에 저장
+        InOrder order = inOrder(musicCatalogService);
+        order.verify(musicCatalogService).clearYoutubeVideoId("v2");
+        order.verify(musicCatalogService).updateYoutubeVideoId(11L, "v2");
+        order.verify(musicCatalogService).clearYoutubeVideoId("v3");
+        order.verify(musicCatalogService).updateYoutubeVideoId(12L, "v3");
         verify(userMusicLikeRepository).deleteByUserIdAndSourceAndMusicIdIn(USER_ID, LikeSource.YOUTUBE_MUSIC, List.of(99L));
         verify(userMusicLikeRepository).insertIfAbsent(USER_ID, 11L, "YOUTUBE_MUSIC");
         verify(userMusicLikeRepository).insertIfAbsent(USER_ID, 12L, "YOUTUBE_MUSIC");
@@ -279,8 +285,8 @@ class YoutubeMusicSyncServiceTest {
 
         verify(youtubeVideoMatchRepository).upsert("v1", 3L, true, NOW);
         verify(musicCatalogService, never()).updateYoutubeVideoId(any(), any());
-        // 예전에 원곡으로 저장된 같은 영상이면 재생 영상에서 제거
-        verify(musicCatalogService).clearYoutubeVideoId(3L, "v1");
+        // 예전에 원곡으로 저장된 같은 영상이면 어느 곡이든 재생 영상에서 제거
+        verify(musicCatalogService).clearYoutubeVideoId("v1");
     }
 
     @Test
