@@ -4,7 +4,9 @@ import com.tuneet.tuneetbe.domain.like.service.MusicLikeMarker;
 import com.tuneet.tuneetbe.domain.feed.dto.response.*;
 import com.tuneet.tuneetbe.domain.feed.entity.Feed;
 import com.tuneet.tuneetbe.domain.feed.entity.FeedMessage;
+import com.tuneet.tuneetbe.domain.feed.entity.FeedMessageReply;
 import com.tuneet.tuneetbe.domain.feed.exception.FeedErrorCode;
+import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageReplyRepository;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedMessageRepository;
 import com.tuneet.tuneetbe.domain.feed.repository.FeedRepository;
 import com.tuneet.tuneetbe.domain.music.dto.response.MusicResponse;
@@ -29,7 +31,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -47,6 +51,7 @@ public class FeedService {
     private final UserBlockRepository userBlockRepository;
     private final MusicLikeMarker musicLikeMarker;
     private final FeedMessageReplyService feedMessageReplyService;
+    private final FeedMessageReplyRepository feedMessageReplyRepository;
 
     // 피드 작성
     @Transactional
@@ -336,14 +341,23 @@ public class FeedService {
             throw new CustomException(UserErrorCode.BLOCKED_USER);
         }
 
+        // 보여줄 코멘트 (최신순, 차단 관계인 사용자의 코멘트 제외)
+        List<FeedMessage> feedMessages = new ArrayList<>();
+        for (FeedMessage feedMessage : feedMessageRepository.findAllByFeedIdOrderByIdDesc(feedId)) {
+            if (!blockedUserIds.contains(feedMessage.getUser().getId())) {
+                feedMessages.add(feedMessage);
+            }
+        }
+
+        // 코멘트별 주고받은 답장 (코멘트 전체의 답장을 한 번에 조회)
+        Map<Long, List<FeedMessageResponse.Reply>> repliesByMessageId = getRepliesByMessageId(feedMessages);
+
         // 응답 목록 세팅 (최신순)
         List<FeedMessageResponse> messageResponses = new ArrayList<>();
-        for (FeedMessage feedMessage : feedMessageRepository.findAllByFeedIdOrderByIdDesc(feedId)) {
+        List<MusicResponse> musics = new ArrayList<>(); // 좋아요 표시할 곡 (코멘트, 답장)
+        for (FeedMessage feedMessage : feedMessages) {
 
             User sender = feedMessage.getUser(); // 코멘트 보낸 사람
-            if (blockedUserIds.contains(sender.getId())) {
-                continue;
-            }
 
             Music music = feedMessage.getMusic(); // 코멘트와 함께 보낸 노래 (없을 수 있음)
             MusicResponse musicResponse = null;
@@ -357,22 +371,66 @@ public class FeedService {
                         .build();
             }
 
+            List<FeedMessageResponse.Reply> replies = repliesByMessageId.getOrDefault(feedMessage.getId(), List.of());
+
             messageResponses.add(FeedMessageResponse.builder()
+                    .feedMessageId(feedMessage.getId())
                     .senderNickname(sender.isDeleted() ? DELETED_USER_NICKNAME : sender.getNickname())
                     .senderProfilePicture(sender.getProfilePicture())
                     .music(musicResponse)
                     .messageContent(feedMessage.getMessageContent())
                     .createdAt(feedMessage.getCreatedAt())
+                    .replies(replies)
                     .build());
+
+            if (musicResponse != null) {
+                musics.add(musicResponse);
+            }
+            for (FeedMessageResponse.Reply reply : replies) {
+                musics.add(reply.getMusic());
+            }
         }
 
         // 내가 좋아요한 곡 표시
-        musicLikeMarker.mark(userId, messageResponses.stream().map(FeedMessageResponse::getMusic).toList());
+        musicLikeMarker.mark(userId, musics);
 
         // 응답 반환
         return FeedMessageListResponse.builder()
                 .messages(messageResponses)
                 .build();
+    }
+
+    // 코멘트 ID별 주고받은 답장 목록 (오래된 순)
+    private Map<Long, List<FeedMessageResponse.Reply>> getRepliesByMessageId(List<FeedMessage> feedMessages) {
+
+        Map<Long, List<FeedMessageResponse.Reply>> repliesByMessageId = new HashMap<>();
+        if (feedMessages.isEmpty()) {
+            return repliesByMessageId;
+        }
+
+        List<Long> feedMessageIds = feedMessages.stream().map(FeedMessage::getId).toList();
+        for (FeedMessageReply reply : feedMessageReplyRepository.findAllByFeedMessageIdInOrderByIdAsc(feedMessageIds)) {
+
+            User sender = reply.getSender(); // 답장 보낸 사람
+            Music music = reply.getMusic(); // 답장과 함께 보낸 노래
+
+            repliesByMessageId.computeIfAbsent(reply.getFeedMessage().getId(), id -> new ArrayList<>())
+                    .add(FeedMessageResponse.Reply.builder()
+                            .replyId(reply.getId())
+                            .senderNickname(sender.isDeleted() ? DELETED_USER_NICKNAME : sender.getNickname())
+                            .senderProfilePicture(sender.getProfilePicture())
+                            .music(MusicResponse.builder()
+                                    .musicId(music.getExternalId())
+                                    .title(music.getTitle())
+                                    .artist(music.getArtist())
+                                    .musicPicture(music.getMusicPicture())
+                                    .videoId(music.getYoutubeVideoId())
+                                    .build())
+                            .replyContent(reply.getReplyContent())
+                            .createdAt(reply.getCreatedAt())
+                            .build());
+        }
+        return repliesByMessageId;
     }
 
     // 보낸 코멘트 리스트 보기

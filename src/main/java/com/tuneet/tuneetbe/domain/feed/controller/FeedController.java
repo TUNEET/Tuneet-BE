@@ -137,7 +137,7 @@ public class FeedController {
     }
 
     // 피드 코멘트 목록 보기
-    @Operation(summary = "피드 코멘트 목록 보기", description = "피드 하나에 달린 코멘트 전체를 최신순으로 조회하는 API (차단 관계인 사용자의 코멘트는 제외)")
+    @Operation(summary = "피드 코멘트 목록 보기", description = "피드 하나에 달린 코멘트 전체를 최신순으로 조회하는 API (코멘트마다 주고받은 답장을 오래된 순으로 포함, 차단 관계인 사용자의 코멘트는 제외)")
     @GetMapping("/feeds/{feed-id}/messages")
     public ResponseEntity<BaseResponse<FeedMessageListResponse>> getFeedMessages(
             @AuthenticationPrincipal CustomUserDetails userDetails,

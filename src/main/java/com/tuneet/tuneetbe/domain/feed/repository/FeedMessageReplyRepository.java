@@ -26,6 +26,10 @@ public interface FeedMessageReplyRepository extends JpaRepository<FeedMessageRep
     @EntityGraph(attributePaths = {"sender", "music"})
     List<FeedMessageReply> findAllByFeedMessageIdOrderByIdAsc(Long feedMessageId);
 
+    // 코멘트 ID 목록에 달린 답장 전체를 보낸 사람, 노래와 함께 오래된 순으로 조회
+    @EntityGraph(attributePaths = {"sender", "music"})
+    List<FeedMessageReply> findAllByFeedMessageIdInOrderByIdAsc(List<Long> feedMessageIds);
+
     // 답장 ID 목록으로 노래, 코멘트와 함께 조회
     @EntityGraph(attributePaths = {"music", "feedMessage"})
     List<FeedMessageReply> findAllByIdIn(List<Long> ids);
