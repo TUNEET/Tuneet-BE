@@ -1,5 +1,13 @@
 # 🎧 TUNEET | Backend
 
+> **나만의 음악에서 우리의 음악으로, TUNEET**
+>
+> 좋아하는 장르·아티스트·노래로 음악 프로필을 만들고, 취향이 비슷한 사람을 추천받아
+> 음악을 담은 편지와 방으로 연결되는 모바일 웹 서비스입니다.
+
+- **서비스 주소**: https://www.tuneet.site
+- **API 문서 (Swagger)**: https://api.kimjeongmo.shop/swagger-ui/index.html
+
 ## 👥 Team Member
 
 | <a href="https://github.com/kjm021028"><img width="150" alt="/" src="https://avatars.githubusercontent.com/kjm021028" /></a> | <a href="https://github.com/Woohwooh03"><img width="150" alt="/" src="https://avatars.githubusercontent.com/Woohwooh03" /></a> |
@@ -19,6 +27,32 @@
 
 ### Infrastructure & Tools
 <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white"> <img src="https://img.shields.io/badge/GitHub Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white"> <img src="https://img.shields.io/badge/AWS EC2-FF9900?style=for-the-badge&logo=amazonec2&logoColor=white"> <img src="https://img.shields.io/badge/AWS S3-569A31?style=for-the-badge&logo=amazons3&logoColor=white"> <img src="https://img.shields.io/badge/Swagger-85EA2D?style=for-the-badge&logo=swagger&logoColor=black">
+
+## 🏗 System Architecture
+<img width="3200" height="2160" alt="시스템 아키텍처" src="https://github.com/user-attachments/assets/d35dd07b-8fef-47d1-9b7c-426722ffa960" />
+
+## 🗂 ERD
+### 📌 Service DB
+<img width="4220" height="1772" alt="Tuneet" src="https://github.com/user-attachments/assets/8671a6f4-f0d2-451b-a3e7-30320a17c5f2" />
+
+### 🎵 Music DB (외부 음악 데이터)
+<img width="2140" height="732" alt="외부 DB" src="https://github.com/user-attachments/assets/483900af-6418-43c0-bb56-c67562082d0a" />
+
+## ✨ 주요 기능
+
+| 영역            | 기능                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------- |
+| **인증**        | 이메일 회원가입·로그인, JWT Access/Refresh 토큰 발급·재발급, 약관 동의 기록                        |
+| **음악 프로필** | 닉네임·프로필 사진(S3 업로드), 장르·아티스트·대표곡 설정, 외부 음악 API 연동 곡 검색               |
+| **유튜브 뮤직** | Google OAuth 연동, 좋아요한 곡 동기화, 플랫폼 토큰 암호화 저장, 주기적 자동 재동기화               |
+| **피드**        | 음악 피드 CRUD, 좋아요, 노래를 담은 코멘트·답장                                  |
+| **매칭**        | 취향 일치율 계산, 위치 기반 유저 추천, 공통 취향 조회, 차단                                        |
+| **편지**        | 지정·랜덤 유저 편지 발송, 답장, 받은·보낸 편지함, 하루 발송 횟수 제한, 환영 편지                    |
+| **방**          | 방 생성(비밀번호), 초대 링크 입장, 멤버별 취향 일치율, 방 피드, 공동 플레이리스트                  |
+| **알림**        | FCM 푸시(코멘트·편지·답장), 트랜잭션 커밋 후 비동기 전송, 만료 토큰 자동 정리, 알림별 이동 링크    |
+| **계정 관리**   | 프로필 수정, 위치 공개·편지 수신 설정, 탈퇴 시 연관 데이터 정리                                    |
+
+<br>
 
 ## 🎯 Git Convention
 
